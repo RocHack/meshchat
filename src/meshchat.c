@@ -21,8 +21,7 @@
 #include "cjdnsadmin.h"
 #include "util.h"
 
-#define MESHCHAT_PORT "14627"
-#define MESHCHAT_PORT2 14627
+#define MESHCHAT_PORT 14627
 #define MESHCHAT_PACKETLEN 1400
 #define MESHCHAT_PEERFETCH_INTERVAL 60
 #define MESHCHAT_PEERSERVICE_INTERVAL 5
@@ -34,7 +33,7 @@ struct meshchat {
     ircd_t *ircd;
     cjdnsadmin_t *cjdnsadmin;
     const char *host;
-    const char *port;
+    int port;
     int listener;
     time_t last_peerfetch;
     time_t last_peerservice;
@@ -88,7 +87,7 @@ meshchat_t *meshchat_new() {
 
     // todo: allow custom port/hostname
     mc->port = MESHCHAT_PORT;
-    mc->host = 0; // wildcard
+    mc->host = "::"; // wildcard
 
     return mc;
 }
@@ -109,38 +108,22 @@ meshchat_start(meshchat_t *mc) {
     // connect to cjdns admin
     cjdnsadmin_start(mc->cjdnsadmin);
 
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET6;
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_flags = AI_PASSIVE|AI_ADDRCONFIG;
-    struct addrinfo* res = 0;
-    int err = getaddrinfo(mc->host, mc->port, &hints, &res);
-    if (err != 0) {
-        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(err));
-        return;
-    }
+    struct sockaddr_in6 addr = {0};
+    addr.sin6_family = AF_INET6;
+    addr.sin6_port = htons(mc->port);
+    inet_pton(AF_INET6, mc->host, &(addr.sin6_addr));
 
-    int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    int fd = socket(AF_INET6, SOCK_DGRAM, 0);
     if (fd==-1) {
         perror("socket");
     }
     mc->listener = fd;
 
-    if (bind(fd, res->ai_addr, res->ai_addrlen) < 0) {
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("bind");
     }
 
-    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)res->ai_addr;
-    char addr_str[INET6_ADDRSTRLEN];
-    if (!inet_ntop(AF_INET6, &(addr->sin6_addr), addr_str, INET6_ADDRSTRLEN)) {
-        perror("inet_ntop");
-        addr_str[0] = '\0';
-    }
-
-    printf("meshchat bound to %s\n", sprint_addrport(res->ai_addr));
-
-    freeaddrinfo(res);
+    printf("meshchat bound to %s\n", sprint_addrport((struct sockaddr *)&addr));
 }
 
 void
@@ -240,7 +223,7 @@ peer_new(const char *ip) {
     strcpy(peer->ip, ip);
     memset(&peer->addr, 0, sizeof(peer->addr));
     peer->addr.sin6_family = AF_INET6;
-    peer->addr.sin6_port = htons(MESHCHAT_PORT2);
+    peer->addr.sin6_port = htons(MESHCHAT_PORT);
     inet_pton(AF_INET6, ip, &(peer->addr.sin6_addr));
     return peer;
 }
