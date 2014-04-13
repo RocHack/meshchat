@@ -15,7 +15,6 @@ int main()
 //int main(int argc, char *argv[])
 {
 	meshchat_t *mc;
-	ircd_t *ircd;
 	struct timeval tv;
 	fd_set in_set, out_set;
 	int maxfd = 0;
@@ -26,14 +25,7 @@ int main()
 		exit(1);
 	}
 
-	ircd = ircd_new();
-	if (!ircd) {
-		fprintf(stderr, "fail\n");
-		exit(1);
-	}
-
 	// Start connecting stuff
-	ircd_start(ircd);
 	meshchat_start(mc);
 
 	while (1) {
@@ -46,7 +38,6 @@ int main()
 		tv.tv_usec = 0;
 		tv.tv_sec = 1;
 
-		ircd_add_select_descriptors(ircd, &in_set, &out_set, &maxfd);
 		meshchat_add_select_descriptors(mc, &in_set, &out_set, &maxfd);
 
 		// Call select()
@@ -54,7 +45,6 @@ int main()
 			perror("select");
 		}
 
-		ircd_process_select_descriptors(ircd, &in_set, &out_set);
 		meshchat_process_select_descriptors(mc, &in_set, &out_set);
 	}
 

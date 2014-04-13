@@ -19,6 +19,7 @@
 #define MESHCHAT_PACKETLEN 1400
 
 struct meshchat {
+	ircd_t *ircd;
 	const char *host;
 	const char *port;
 	int listener;
@@ -31,6 +32,12 @@ meshchat_t *meshchat_new() {
 	if (!mc) {
 		perror("calloc");
 		return NULL;
+	}
+
+	mc->ircd = ircd_new();
+	if (!mc->ircd) {
+		fprintf(stderr, "fail\n");
+		exit(1);
 	}
 
 	// todo: allow custom port/hostname
@@ -47,6 +54,8 @@ meshchat_free(meshchat_t *mc) {
 
 void
 meshchat_start(meshchat_t *mc) {
+	ircd_start(mc->ircd);
+
 	struct addrinfo hints;
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET6;
@@ -84,6 +93,9 @@ meshchat_start(meshchat_t *mc) {
 void
 meshchat_add_select_descriptors(meshchat_t *mc, fd_set *in_set,
 		fd_set *out_set, int *maxfd) {
+
+	ircd_add_select_descriptors(mc->ircd, in_set, out_set, maxfd);
+
 	int fd = mc->listener;
 
 	FD_SET(fd, in_set);
@@ -96,6 +108,8 @@ void
 meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
 		fd_set *out_set) {
 	static char buffer[MESHCHAT_PACKETLEN];
+
+	ircd_process_select_descriptors(mc->ircd, in_set, out_set);
 
 	// check if our listener has something
 	if (!FD_ISSET(mc->listener, in_set)) {
