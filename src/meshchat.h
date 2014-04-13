@@ -6,8 +6,6 @@
 #ifndef MESHCHAT_H
 #define MESHCHAT_H
 
-#include <sys/select.h>
-
 #define MESHCHAT_MESSAGE_LEN 512
 #define MESHCHAT_CHANNEL_LEN 50
 #define MESHCHAT_NAME_LEN 9
@@ -15,6 +13,14 @@
 #define MESHCHAT_HOST_LEN 63
 
 typedef struct meshchat meshchat_t;
+typedef struct peer peer_t;
+
+enum peer_status {
+    PEER_UNKNOWN,   // we haven't contacted them
+    PEER_CONTACTED, // we have sent a greeting
+    PEER_ACTIVE,    // they have sent us a greeting recently
+    PEER_INACTIVE, // they have not sent us a greeting recently
+};
 
 meshchat_t *meshchat_new();
 
