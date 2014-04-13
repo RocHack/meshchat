@@ -13,6 +13,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 #include "ircd.h"
 #include "meshchat.h"
 #include "cjdnsadmin.h"
@@ -20,6 +21,7 @@
 
 #define MESHCHAT_PORT "14627"
 #define MESHCHAT_PACKETLEN 1400
+#define MESHCHAT_PEERFETCH_INTERVAL 10
 
 struct meshchat {
     ircd_t *ircd;
@@ -27,9 +29,11 @@ struct meshchat {
     const char *host;
     const char *port;
     int listener;
+    time_t last_peerfetch_time;
 };
 
 void handle_datagram(char *buffer, ssize_t len);
+void found_ip(void *obj, const char *ip);
 
 meshchat_t *meshchat_new() {
     meshchat_t *mc = calloc(1, sizeof(meshchat_t));
@@ -44,6 +48,9 @@ meshchat_t *meshchat_new() {
         fprintf(stderr, "fail\n");
         return NULL;
     }
+
+    // add callback for peer discovery through cjdns
+    cjdnsadmin_on_found_ip(mc->cjdnsadmin, found_ip, (void *)mc);
 
     mc->ircd = ircd_new();
     if (!mc->ircd) {
@@ -129,6 +136,14 @@ meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
     ircd_process_select_descriptors(mc->ircd, in_set, out_set);
     cjdnsadmin_process_select_descriptors(mc->cjdnsadmin, in_set, out_set);
 
+    // periodically fetch list of peers to ping
+    time_t now;
+    time(&now);
+    if (difftime(now, mc->last_peerfetch_time) > MESHCHAT_PEERFETCH_INTERVAL) {
+        mc->last_peerfetch_time = now;
+        cjdnsadmin_fetch_peers(mc->cjdnsadmin);
+    }
+
     // check if our listener has something
     if (!FD_ISSET(mc->listener, in_set)) {
         return;
@@ -150,4 +165,12 @@ meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
 void
 handle_datagram(char *buffer, ssize_t len) {
     printf("got message: \"%*s\"\n", (int)len, buffer);
+}
+
+void
+found_ip(void *obj, const char *ip) {
+    // found an ip.
+    //printf("ip: %s\n", ip);
+    // check if we already know about it
+    // if it's new, add it to the list
 }

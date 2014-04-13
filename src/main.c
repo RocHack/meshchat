@@ -25,6 +25,8 @@ int main()
         exit(1);
     }
 
+    setbuf(stdout, NULL);
+
     // Start connecting stuff
     meshchat_start(mc);
 
