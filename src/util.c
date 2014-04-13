@@ -46,3 +46,16 @@ sprint_addrport(struct sockaddr *in)
     return buffer;
 }
 
+/* STRING WORD COPY */
+void
+strwncpy(char *dst, const char *src, size_t max) {
+    int i = 0;
+    while (*src > ' ' && *src < 127 && i < max) {
+        *dst = *src;
+        src++;
+        dst++;
+        i++;
+    }
+    *dst = '\0';
+}
+

@@ -140,7 +140,11 @@ ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
 void
 ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *lineptr) {
-    printf("%s\n", lineptr);
+    if (strncmp(lineptr, "NICK ", 5) == 0) {
+        // NICK username
+        strwncpy(ircd->nick, lineptr + 5, MESHCHAT_NAME_LEN);
+        //printf("NICK %s\n", ircd->nick);
+    }
 }
 
 void
@@ -183,7 +187,8 @@ ircd_handle_buffer(ircd_t *ircd, struct irc_session *session,
         line_start = line_end + 1;
     }
     /* Shift buffer down so the unprocessed data is at the start */
-    session->inbuf_used -= (session->inbuf - line_start);
+    // printf("%d used %d read %d left\n", session->inbuf_used, rv, session->inbuf - line_start);
+    session->inbuf_used += (session->inbuf - line_start);
     if (session->inbuf_used > 0) {
         memmove(session->inbuf, line_start, session->inbuf_used);
     }
