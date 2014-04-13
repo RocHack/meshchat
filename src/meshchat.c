@@ -383,19 +383,17 @@ broadcast_all_peer(meshchat_t *mc, peer_t *peer, void *msg, size_t len) {
 
 // send a message to all active peers
 void
-broadcast_all(meshchat_t *mc, void *msg) {
-    size_t len = strlen(msg);
+broadcast_all(meshchat_t *mc, void *msg, size_t len) {
     if (len > MESHCHAT_PACKETLEN) len = MESHCHAT_PACKETLEN;
     hash_each_val(mc->peers, broadcast_all_peer(mc, val, msg, len));
 }
 
 // send a message to all active peers in a channel
 void
-broadcast_channel(meshchat_t *mc, char *channel, void *msg) {
-    size_t len = strlen(msg);
+broadcast_channel(meshchat_t *mc, char *channel, void *msg, size_t len) {
     if (len > MESHCHAT_PACKETLEN) len = MESHCHAT_PACKETLEN;
     // todo: broadcast only to channel
-    broadcast_all(mc, msg);
+    broadcast_all(mc, msg, len);
     //hash_each_val(mc->peers, broadcast_active_peer(mc, val, msg, len));
 }
 
@@ -425,14 +423,13 @@ on_irc_msg(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
     static char msg[MESHCHAT_PACKETLEN];
     size_t channel_len = strlen(channel)+1;
-    size_t data_len = strlen(data);
+    size_t data_len = strlen(data)+1;
     // todo: check for buffer overrun
     msg[0] = EVENT_MSG;
     // include null byte as seperator
     strncpy(msg + 1, channel, channel_len);
     strncpy(msg + 1 + channel_len, data, data_len);
-    //snprintf(msg+1, sizeof(msg)-1, "%s\0%s", channel, data);
-    broadcast_channel(mc, channel, msg);
+    broadcast_channel(mc, channel, msg, 1 + channel_len + data_len);
 }
 
 void
@@ -462,18 +459,20 @@ void
 on_irc_join(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
     static char msg[MESHCHAT_PACKETLEN];
+    size_t len = strlen(channel)+1;
     msg[0] = EVENT_JOIN;
-    strncpy(msg+1, channel, sizeof(msg)-1);
-    broadcast_all(mc, msg);
+    strncpy(msg+1, channel, len);
+    broadcast_all(mc, msg, 1+len);
 }
 
 void
 on_irc_part(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
     static char msg[MESHCHAT_PACKETLEN];
+    size_t len = strlen(channel)+1;
     msg[0] = EVENT_PART;
-    strncpy(msg+1, channel, sizeof(msg)-1);
-    broadcast_all(mc, msg);
+    strncpy(msg+1, channel, len);
+    broadcast_all(mc, msg, 1+len);
 }
 
 void
@@ -481,8 +480,9 @@ on_irc_nick(void *obj, char *channel, char *data) {
     (void)channel;
     meshchat_t *mc = (meshchat_t *)obj;
     static char msg[MESHCHAT_PACKETLEN];
+    size_t len = strlen(data)+1;
     msg[0] = EVENT_NICK;
     // todo: don't bother writing null bytes up to the end of the buffer
-    strncpy(msg+1, data, sizeof(msg)-1);
-    broadcast_all(mc, msg);
+    strncpy(msg+1, data, len);
+    broadcast_all(mc, msg, 1+len);
 }

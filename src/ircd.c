@@ -205,11 +205,17 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char channel[MESHCHAT_CHANNEL_LEN];
         char message[MESHCHAT_MESSAGE_LEN];
         int clen = strwncpy(channel, lineptr + 8, MESHCHAT_CHANNEL_LEN);
+        if (lineptr[clen + 9] == ':') {
+            // skip colon/prefix
+            clen++;
+        }
         strncpy(message, lineptr + 9 + clen, MESHCHAT_MESSAGE_LEN);
         printf("CLIENT in %s: %s\n", channel, message);
         callback_call(ircd->callbacks.on_msg, channel, message);
         //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
         //printf("NICK %s\n", ircd->nick);
+    } else if (strncmp(lineptr, "PING ", 5) == 0) {
+        ircd_send(ircd, session, "PONG localhost", ircd->username);
     }
 }
 
