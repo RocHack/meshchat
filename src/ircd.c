@@ -190,7 +190,11 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         //printf("NICK %s\n", ircd->nick);
     } else if (strncmp(lineptr, "PRIVMSG ", 8) == 0) {
         // NICK username
-        //ircd->callbacks.on_msg.fn(ircd->callbacks.on_join.obj, lineptr + 5, NULL);
+        char channel[MESHCHAT_CHANNEL_LEN];
+        char message[MESHCHAT_MESSAGE_LEN];
+        int clen = strwncpy(channel, lineptr + 8, MESHCHAT_CHANNEL_LEN);
+        strncpy(message, lineptr + 9 + clen, MESHCHAT_MESSAGE_LEN);
+        ircd->callbacks.on_msg.fn(ircd->callbacks.on_msg.obj, channel, message);
         //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
         //printf("NICK %s\n", ircd->nick);
     }
