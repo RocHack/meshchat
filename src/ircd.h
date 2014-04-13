@@ -9,6 +9,7 @@
 #include <sys/select.h>
 
 #define IRCD_BACKLOG 10
+#define IRCD_BUFFER_LEN 1024
 
 typedef struct ircd ircd_t;
 

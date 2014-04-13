@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include "ircd.h"
 #include "meshchat.h"
 #include "util.h"
@@ -18,6 +19,8 @@
 struct irc_session {
     // fd socket (TCP recv())
     int fd;
+    char inbuf[IRCD_BUFFER_LEN];
+    size_t inbuf_used;
     // link
     struct irc_session *next;
 };
@@ -134,7 +137,57 @@ ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
     }
 }
 
+void
+ircd_handle_message(ircd_t *ircd, struct irc_session *session,
+        char *lineptr) {
+    printf("%s\n", lineptr);
+}
 
+void
+ircd_handle_buffer(ircd_t *ircd, struct irc_session *session,
+        int fd) {
+    size_t buf_remain = IRCD_BUFFER_LEN - session->inbuf_used;
+    if (buf_remain == 0) {
+        fprintf(stderr, "Line exceeded buffer length!\n");
+        return;
+    }
+
+    ssize_t rv = recv(fd, session->inbuf + session->inbuf_used, buf_remain, MSG_DONTWAIT);
+    if (rv == 0) {
+        fprintf(stderr, "Connection closed.\n");
+        return;
+    }
+    if (rv < 0 && errno == EAGAIN) {
+        /* no data for now, call back when the socket is readable */
+        return;
+    }
+    if (rv < 0) {
+        perror("recv");
+        return;
+    }
+    session->inbuf_used += rv;
+
+    /* Scan for newlines in the line buffer; we're careful here to deal with embedded \0s
+     * an evil client may send, as well as only processing lines that are complete.
+     */
+    char *line_start = session->inbuf;
+    char *line_end;
+    size_t max_len = session->inbuf_used - (line_start - session->inbuf);
+    if (max_len > MESHCHAT_MESSAGE_LEN) {
+        max_len = MESHCHAT_MESSAGE_LEN; // MUST be <= 512 chars per line
+    }
+    while ( (line_end = (char*)memchr((void*)line_start, '\n', session->inbuf_used - (line_start - session->inbuf))))
+    {
+        *line_end = 0;
+        ircd_handle_message(ircd, session, line_start);
+        line_start = line_end + 1;
+    }
+    /* Shift buffer down so the unprocessed data is at the start */
+    session->inbuf_used -= (session->inbuf - line_start);
+    if (session->inbuf_used > 0) {
+        memmove(session->inbuf, line_start, session->inbuf_used);
+    }
+}
 
 void
 ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
@@ -151,6 +204,7 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
 
             struct irc_session *new_session = (struct irc_session *)malloc(sizeof(struct irc_session));
             new_session->fd = new_fd;
+            new_session->inbuf_used = 0;
             new_session->next = ircd->session_list;
             ircd->session_list = new_session;
         }
@@ -159,15 +213,8 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
     // wait for recv()s from clients
     struct irc_session *session = ircd->session_list;
     while (session != NULL) {
-        char buffer[MESHCHAR_MESSAGE_LEN];
-        int len;
         if (FD_ISSET(session->fd, in_set)) {
-            if ((len = recv(session->fd, buffer, MESHCHAT_MESSAGE_LEN, 0)) < 0) {
-                perror("recv");
-                close(session->fd);
-            }
-
-            int readlen = ircd_handle_message(ircd, session, buffer, len);
+            ircd_handle_buffer(ircd, session, session->fd);
         }
 
         session = session->next;
