@@ -214,8 +214,6 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
     //printf("%s sent (%u, %zd): \"%*s\"\n", sprint_addrport(in),
             //msg[0], len, (int)len-1, msg+1);
     peer_t *peer;
-    // sanitize msg, maybe
-    msg[len] = '\0';
 
     if (!hash_size(mc->peers)) {
         // got a message without peers. :(
@@ -236,13 +234,13 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
         return;
     }
 
-    len--;
-    msg++;
     const char *channel;
     peer->status = PEER_ACTIVE;
     time_t now = time(0);
     peer->last_message = now;
-    switch(msg[-1]) {
+    // first byte is the event type
+    msg[len--] = '\0';
+    switch(*(msg++)) {
         case EVENT_GREETING:
             printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
             // respond back if they are new to us
@@ -348,13 +346,14 @@ peer_send(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
 }
 
 static inline void
-service_peer(meshchat_t *mc, time_t now, const char *key, peer_t *peer) {
+service_peer(meshchat_t *mc, time_t now, peer_t *peer) {
     //peer_print(peer);
     switch (peer->status) {
         // greet new unknown peer
         case PEER_UNKNOWN:
             greet_peer(mc, peer);
             peer->status = PEER_CONTACTED;
+            peer->last_message = now;
             break;
         case PEER_CONTACTED:
         case PEER_ACTIVE:
@@ -378,17 +377,18 @@ service_peer(meshchat_t *mc, time_t now, const char *key, peer_t *peer) {
 }
 
 static inline void
-broadcast_all_peer(meshchat_t *mc, peer_t *peer, void *msg, size_t len) {
+broadcast_all_peer(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
     // send only to active peer
     if (peer->status == PEER_ACTIVE) {
-        printf("sending %*s\n", (int)len-1, (char *)msg);
+        msg[len] = '\0';
+        printf("sending %s\n", (char *)msg);
         peer_send(mc, peer, msg, len);
     }
 }
 
 // send a message to all active peers
 void
-broadcast_all(meshchat_t *mc, void *msg, size_t len) {
+broadcast_all(meshchat_t *mc, char *msg, size_t len) {
     if (len > MESHCHAT_PACKETLEN) len = MESHCHAT_PACKETLEN;
     hash_each_val(mc->peers, broadcast_all_peer(mc, val, msg, len));
 }
@@ -407,7 +407,7 @@ service_peers(meshchat_t *mc) {
     //printf("servicing peers (%u)\n", hash_size(mc->peers));
     time_t now;
     time(&now);
-    hash_each(mc->peers, service_peer(mc, now, key, val));
+    hash_each_val(mc->peers, service_peer(mc, now, val));
 }
 
 void
