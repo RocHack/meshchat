@@ -177,10 +177,10 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
     } else if (strncmp(lineptr, "USER ", 5) == 0) {
         // NICK username
         strwncpy(ircd->username, lineptr + 5, MESHCHAT_FULLNAME_LEN);
-        ircd_send(ircd, session, "001 :Welcome to this MeshChat Relay (I'm not really an IRC server!)");
-        ircd_send(ircd, session, "002 :IRC MeshChat v1");
-        ircd_send(ircd, session, "003 :Created 0");
-        ircd_send(ircd, session, "004 localhost ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI");
+        ircd_send(ircd, session, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->username);
+        ircd_send(ircd, session, "002 %s :IRC MeshChat v1", ircd->username);
+        ircd_send(ircd, session, "003 %s :Created 0", ircd->username);
+        ircd_send(ircd, session, "004 %s localhost ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->username);
         //printf("NICK %s\n", ircd->nick);
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
         // NICK username
