@@ -240,6 +240,7 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
     msg++;
     const char *channel;
     peer->status = PEER_ACTIVE;
+    time(&peer->last_greeting);
     switch(msg[-1]) {
         case EVENT_GREETING:
             printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
