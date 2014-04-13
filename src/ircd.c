@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -138,11 +139,44 @@ ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
 }
 
 void
+ircd_send(ircd_t *ircd, struct irc_session *session, char *format, ...) {
+    char buffer[MESHCHAT_MESSAGE_LEN]; // 512
+    va_list ap;
+    size_t prefixlen = 11;
+    size_t suffixlen = 2;
+    int len = 0;
+
+    strcpy(buffer, ":localhost ");
+
+    va_start(ap, format);
+    len = vsnprintf(buffer + prefixlen, MESHCHAT_MESSAGE_LEN - prefixlen - suffixlen, format, ap);
+    va_end(ap);
+
+    if (len > MESHCHAT_MESSAGE_LEN - suffixlen) {
+        len = MESHCHAT_MESSAGE_LEN;
+    }
+    strcpy(buffer + len, "\r\n");
+
+    send(session->fd, buffer, len, 0);
+}
+
+void
 ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *lineptr) {
     if (strncmp(lineptr, "NICK ", 5) == 0) {
         // NICK username
         strwncpy(ircd->nick, lineptr + 5, MESHCHAT_NAME_LEN);
+        //printf("NICK %s\n", ircd->nick);
+    } else if (strncmp(lineptr, "USER ", 5) == 0) {
+        // NICK username
+        strwncpy(ircd->username, lineptr + 5, MESHCHAT_FULLNAME_LEN);
+        ircd_send(ircd, session, "001 :Welcome to this MeshChat Relay (I'm not really an IRC server!)");
+        //printf("NICK %s\n", ircd->nick);
+    } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
+        // NICK username
+        ircd->callbacks.on_join.fn(ircd->callbacks.on_join.obj, lineptr + 5, NULL);
+        printf("CLIENT WANTS TO JOIN %s\n", lineptr + 5);
+        //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
         //printf("NICK %s\n", ircd->nick);
     }
 }
