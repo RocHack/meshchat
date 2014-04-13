@@ -281,22 +281,14 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
 peer_t *
 get_peer(meshchat_t *mc, const char *ip) {
     peer_t *peer;
+    static char ip_copy[INET6_ADDRSTRLEN];
 
     // canonicalize the ipv6 string
-    struct in6_addr addr;
-    static char ip_copy[INET6_ADDRSTRLEN];
-    memset(&addr, 0, sizeof(addr));
-    // turn ip string to addr
-    if (inet_pton(AF_INET6, ip, &addr) < 1) {
-        perror("inet_pton");
-    }
-    // turn addr back into ip string
-    if (!inet_ntop(AF_INET6, &addr, ip_copy, INET6_ADDRSTRLEN)) {
-        perror("inet_ntop");
+    if (!canonicalize_ipv6(ip_copy, ip)) {
+        fprintf(stderr, "Failed to canonicalize ip %s\n", ip);
     }
 
-
-    //printf("ip: %s/%s, peers: %u\n", ip, ip_copy, hash_size(mc->peers));
+    //printf("ip: %s, peers: %u\n", ip_copy, hash_size(mc->peers));
     if (hash_size(mc->peers)) {
         peer = hash_get(mc->peers, (char *)ip_copy);
         if (peer) {

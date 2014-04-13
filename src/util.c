@@ -59,3 +59,20 @@ strwncpy(char *dst, const char *src, size_t max) {
     *dst = '\0';
 }
 
+int
+canonicalize_ipv6(char *dest, const char *src)
+{
+    struct in6_addr addr;
+    memset(&addr, 0, sizeof(addr));
+    // turn ip string to addr
+    if (inet_pton(AF_INET6, src, &addr) < 1) {
+        perror("inet_pton");
+        return 0;
+    }
+    // turn addr back into ip string
+    if (!inet_ntop(AF_INET6, &addr, dest, INET6_ADDRSTRLEN)) {
+        perror("inet_ntop");
+        return 0;
+    }
+    return 1;
+}
