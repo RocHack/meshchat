@@ -89,7 +89,7 @@ ircd_start(ircd_t *ircd) {
         return;
     }
 
-    if (bind(ircd->listener, result->ai_addr, result->ai_addrlen) < 0) {
+    if (bind(ircd->fd, result->ai_addr, result->ai_addrlen) < 0) {
         perror("bind");
         freeaddrinfo(result);
         return;
@@ -97,7 +97,7 @@ ircd_start(ircd_t *ircd) {
 
     freeaddrinfo(result);
 
-    if (listen(ircd->listener, IRCD_BACKLOG) > 0) {
+    if (listen(ircd->fd, IRCD_BACKLOG) > 0) {
         perror("listen");
         return;
     }

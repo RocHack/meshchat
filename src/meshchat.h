@@ -7,6 +7,12 @@
 
 #include <sys/select.h>
 
+#define MESHCHAT_MESSAGE_LEN 512
+#define MESHCHAT_CHANNEL_LEN 50
+#define MESHCHAT_NAME_LEN 9
+#define MESHCHAT_FULLNAME_LEN 32
+#define MESHCHAT_HOST_LEN 63
+
 typedef struct meshchat meshchat_t;
 
 meshchat_t *meshchat_new();
