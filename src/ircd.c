@@ -194,6 +194,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char message[MESHCHAT_MESSAGE_LEN];
         int clen = strwncpy(channel, lineptr + 8, MESHCHAT_CHANNEL_LEN);
         strncpy(message, lineptr + 9 + clen, MESHCHAT_MESSAGE_LEN);
+        printf("CLIENT in %s: %s\n", channel, message);
         ircd->callbacks.on_msg.fn(ircd->callbacks.on_msg.obj, channel, message);
         //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
         //printf("NICK %s\n", ircd->nick);
