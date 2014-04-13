@@ -267,8 +267,10 @@ get_peer(meshchat_t *mc, const char *ip) {
     //printf("ip: %s, peers: %u\n", ip, hash_size(mc->peers));
     if (hash_size(mc->peers)) {
         peer = hash_get(mc->peers, (char *)ip);
-        // we have already seen this ip
-        return peer;
+        if (peer) {
+            // we have already seen this ip
+            return peer;
+        }
     }
 
     // restrict the network to a small collection of peers, for testing
