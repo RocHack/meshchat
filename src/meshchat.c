@@ -297,14 +297,6 @@ get_peer(meshchat_t *mc, const char *ip) {
         }
     }
 
-    // restrict the network to a small collection of peers, for testing
-    if (1 &&
-#define IP(addr) strcmp(ip_copy, addr) &&
-#include "mynetwork.def"
-    1) {
-        return NULL;
-    }
-
     // new peer. add to the list
     peer = peer_new(ip_copy);
     if (!peer) {
