@@ -101,6 +101,15 @@ ircd_start(ircd_t *ircd) {
         perror("listen");
         return;
     }
+
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)result->ai_addr;
+    char addr_str[INET6_ADDRSTRLEN];
+    if (!inet_ntop(AF_INET6, &(addr->sin6_addr), addr_str, INET6_ADDRSTRLEN)) {
+        perror("inet_ntop");
+        addr_str[0] = '\0';
+    }
+
+    printf("ircd listening on [%s]:%d\n", addr_str, ntohs(addr->sin6_port));
 }
 
 void
