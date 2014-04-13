@@ -374,7 +374,7 @@ static inline void
 broadcast_all_peer(meshchat_t *mc, peer_t *peer, void *msg, size_t len) {
     // send only to active peer
     if (peer->status == PEER_ACTIVE) {
-        printf("sending %s\n", msg);
+        printf("sending %*s\n", (int)len-1, (char *)msg);
         peer_send(mc, peer, msg, len);
     }
 }
