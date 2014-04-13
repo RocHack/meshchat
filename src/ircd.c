@@ -225,4 +225,3 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
         session = session->next;
     }
 }
-

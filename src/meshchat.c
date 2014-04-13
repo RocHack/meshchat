@@ -48,13 +48,30 @@ struct peer {
     time_t last_greeted;    // we sent to them
 };
 
+enum event_type {
+    EVENT_MSG = 1,
+    EVENT_PRIVMSG,
+    EVENT_ACTION,
+    EVENT_NOTICE,
+    EVENT_JOIN,
+    EVENT_PART,
+    EVENT_NICK,
+};
+
 void handle_datagram(struct sockaddr *addr, char *buffer, ssize_t len);
 void found_ip(void *obj, const char *ip);
 void service_peers(meshchat_t *mc);
 peer_t *peer_new(const char *ip);
 void peer_send(meshchat_t *mc, peer_t *peer, char *msg, size_t len);
 void greet_peer(meshchat_t *mc, peer_t *peer);
+
 void on_irc_msg(void *obj, char *channel, char *data);
+void on_irc_privmsg(void *obj, char *channel, char *data);
+void on_irc_action(void *obj, char *channel, char *data);
+void on_irc_notice(void *obj, char *channel, char *data);
+void on_irc_nick(void *obj, char *channel, char *data);
+void on_irc_join(void *obj, char *channel, char *data);
+void on_irc_part(void *obj, char *channel, char *data);
 
 meshchat_t *meshchat_new() {
     meshchat_t *mc = calloc(1, sizeof(meshchat_t));
@@ -81,7 +98,13 @@ meshchat_t *meshchat_new() {
     cjdnsadmin_on_found_ip(mc->cjdnsadmin, found_ip, (void *)mc);
 
     ircd_callbacks_t callbacks = {
-        .on_msg = {(void *)mc, on_irc_msg}
+        .on_msg = {(void *)mc, on_irc_msg},
+        .on_privmsg = {(void *)mc, on_irc_privmsg},
+        .on_part = {(void *)mc, on_irc_part},
+        .on_join = {(void *)mc, on_irc_join},
+        .on_nick = {(void *)mc, on_irc_nick},
+        .on_action = {(void *)mc, on_irc_action},
+        .on_notice = {(void *)mc, on_irc_notice},
     };
 
     mc->ircd = ircd_new(&callbacks);
@@ -187,7 +210,7 @@ meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
 void
 handle_datagram(struct sockaddr *addr, char *buffer, ssize_t len) {
     printf("%s sent: \"%*s\"\n", sprint_addrport(addr),
-            (int)len-1, buffer);
+            (int)len-1, buffer+1);
 }
 
 void
@@ -274,6 +297,30 @@ service_peer(meshchat_t *mc, time_t now, const char *key, peer_t *peer) {
     }
 }
 
+static inline void
+broadcast_all_peer(meshchat_t *mc, peer_t *peer, void *msg, size_t len) {
+    // send only to active peer
+    if (peer->status == PEER_ACTIVE) {
+        peer_send(mc, peer, msg, len);
+    }
+}
+
+// send a message to all active peers
+void
+broadcast_all(meshchat_t *mc, void *msg) {
+    size_t len = strlen(msg);
+    if (len > MESHCHAT_PACKETLEN) len = MESHCHAT_PACKETLEN;
+    hash_each_val(mc->peers, broadcast_all_peer(mc, val, msg, len));
+}
+
+// send a message to all active peers in a channel
+void
+broadcast_channel(meshchat_t *mc, char *channel, void *msg) {
+    size_t len = strlen(msg);
+    if (len > MESHCHAT_PACKETLEN) len = MESHCHAT_PACKETLEN;
+    //hash_each_val(mc->peers, broadcast_active_peer(mc, val, msg, len));
+}
+
 void
 service_peers(meshchat_t *mc) {
     //printf("servicing peers (%u)\n", hash_size(mc->peers));
@@ -292,4 +339,67 @@ greet_peer(meshchat_t *mc, peer_t *peer) {
 
 void
 on_irc_msg(void *obj, char *channel, char *data) {
+    meshchat_t *mc = (meshchat_t *)obj;
+    static char msg[MESHCHAT_PACKETLEN];
+    size_t channel_len = strlen(channel)+1;
+    size_t data_len = strlen(data);
+    // todo: check for buffer overrun
+    msg[0] = EVENT_MSG;
+    // include null byte as seperator
+    strncpy(msg + 1, channel, channel_len);
+    strncpy(msg + 1 + channel_len, data, data_len);
+    //snprintf(msg+1, sizeof(msg)-1, "%s\0%s", channel, data);
+    broadcast_channel(mc, channel, msg);
+}
+
+void
+on_irc_action(void *obj, char *channel, char *data) {
+    // todo
+}
+
+void
+on_irc_notice(void *obj, char *channel, char *data) {
+    // todo
+}
+
+void
+on_irc_privmsg(void *obj, char *recipient, char *data) {
+    /*
+    meshchat_t *mc = (meshchat_t *)obj;
+    static char msg[MESHCHAT_PACKETLEN];
+    msg[0] = EVENT_PRIVMSG;
+    strncpy(msg+1, data, sizeof(msg)-1);
+    // todo: look up peer
+    //peer = 
+    //peer_send(mc, peer, msg);
+    */
+}
+
+void
+on_irc_join(void *obj, char *channel, char *data) {
+    meshchat_t *mc = (meshchat_t *)obj;
+    static char msg[MESHCHAT_PACKETLEN];
+    msg[0] = EVENT_JOIN;
+    strncpy(msg+1, channel, sizeof(msg)-1);
+    broadcast_all(mc, msg);
+}
+
+void
+on_irc_part(void *obj, char *channel, char *data) {
+    meshchat_t *mc = (meshchat_t *)obj;
+    static char msg[MESHCHAT_PACKETLEN];
+    msg[0] = EVENT_PART;
+    strncpy(msg+1, channel, sizeof(msg)-1);
+    broadcast_all(mc, msg);
+}
+
+void
+on_irc_nick(void *obj, char *channel, char *data) {
+    (void)channel;
+    meshchat_t *mc = (meshchat_t *)obj;
+    static char msg[MESHCHAT_PACKETLEN];
+    msg[0] = EVENT_NICK;
+    // todo: don't bother writing null bytes up to the end of the buffer
+    strncpy(msg+1, data, sizeof(msg)-1);
+    broadcast_all(mc, msg);
 }
