@@ -52,6 +52,13 @@ struct ircd {
     ircd_callbacks_t callbacks;
 };
 
+inline void
+callback_call(callback_t cb, char *channel, char *data) {
+    if (cb.obj) {
+        cb.fn(cb.obj, channel, data);
+    }
+}
+
 ircd_t *ircd_new(ircd_callbacks_t *callbacks) {
     ircd_t *ircd = calloc(1, sizeof(ircd_t));
     if (!ircd) {
@@ -172,7 +179,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
     if (strncmp(lineptr, "NICK ", 5) == 0) {
         // NICK username
         strwncpy(ircd->nick, lineptr + 5, MESHCHAT_NAME_LEN);
-        ircd->callbacks.on_nick.fn(ircd->callbacks.on_nick.obj, NULL, ircd->nick);
+        callback_call(ircd->callbacks.on_nick, NULL, ircd->nick);
         //printf("NICK %s\n", ircd->nick);
     } else if (strncmp(lineptr, "USER ", 5) == 0) {
         // NICK username
@@ -184,7 +191,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         //printf("NICK %s\n", ircd->nick);
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
         // NICK username
-        ircd->callbacks.on_join.fn(ircd->callbacks.on_join.obj, lineptr + 5, NULL);
+        callback_call(ircd->callbacks.on_join, lineptr + 5, NULL);
         printf("CLIENT WANTS TO JOIN %s\n", lineptr + 5);
         //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
         //printf("NICK %s\n", ircd->nick);
@@ -195,7 +202,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         int clen = strwncpy(channel, lineptr + 8, MESHCHAT_CHANNEL_LEN);
         strncpy(message, lineptr + 9 + clen, MESHCHAT_MESSAGE_LEN);
         printf("CLIENT in %s: %s\n", channel, message);
-        ircd->callbacks.on_msg.fn(ircd->callbacks.on_msg.obj, channel, message);
+        callback_call(ircd->callbacks.on_msg, channel, message);
         //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
         //printf("NICK %s\n", ircd->nick);
     }

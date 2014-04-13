@@ -28,6 +28,8 @@ typedef struct {
     callback_t on_nick;
 } ircd_callbacks_t;
 
+void callback_call(callback_t cb, char *channel, char *data);
+
 ircd_t *ircd_new(ircd_callbacks_t *callbacks);
 
 void ircd_free(ircd_t *ircd);
