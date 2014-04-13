@@ -145,6 +145,7 @@ ircd_send(ircd_t *ircd, struct irc_session *session, char *format, ...) {
     size_t prefixlen = 11;
     size_t suffixlen = 2;
     int len = 0;
+    int sv = 0;
 
     strcpy(buffer, ":localhost ");
 
@@ -157,7 +158,9 @@ ircd_send(ircd_t *ircd, struct irc_session *session, char *format, ...) {
     }
     strcpy(buffer + len, "\r\n");
 
-    send(session->fd, buffer, len, 0);
+    while (sv < len) {
+        sv += send(session->fd, buffer + sv, len - sv, 0);
+    }
 }
 
 void
@@ -182,26 +185,46 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
 }
 
 void
-ircd_handle_buffer(ircd_t *ircd, struct irc_session *session,
-        int fd) {
+ircd_free_session(ircd_t *ircd, struct irc_session *session) {
+    session->fd = -1;
+    if (ircd->session_list == session) {
+        ircd->session_list = session->next;
+        free(session);
+    } else {
+        struct irc_session *other_s = ircd->session_list;
+        while (other_s != NULL) {
+            if (other_s->next == session) {
+                other_s->next = session->next;
+                free(session);
+                return;
+            }
+            other_s = other_s->next;
+        }
+    }
+}
+
+int
+ircd_handle_buffer(ircd_t *ircd, struct irc_session *session) {
     size_t buf_remain = IRCD_BUFFER_LEN - session->inbuf_used;
     if (buf_remain == 0) {
         fprintf(stderr, "Line exceeded buffer length!\n");
-        return;
+        return 1;
     }
 
-    ssize_t rv = recv(fd, session->inbuf + session->inbuf_used, buf_remain, MSG_DONTWAIT);
+    ssize_t rv = recv(session->fd, session->inbuf + session->inbuf_used, buf_remain, MSG_DONTWAIT);
     if (rv == 0) {
         fprintf(stderr, "Connection closed.\n");
-        return;
+        close(session->fd);
+        return 0;
     }
     if (rv < 0 && errno == EAGAIN) {
         /* no data for now, call back when the socket is readable */
-        return;
+        return 1;
     }
     if (rv < 0) {
         perror("recv");
-        return;
+        close(session->fd);
+        return 0;
     }
     session->inbuf_used += rv;
 
@@ -226,6 +249,8 @@ ircd_handle_buffer(ircd_t *ircd, struct irc_session *session,
     if (session->inbuf_used > 0) {
         memmove(session->inbuf, line_start, session->inbuf_used);
     }
+
+    return 1;
 }
 
 void
@@ -252,10 +277,21 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
     // wait for recv()s from clients
     struct irc_session *session = ircd->session_list;
     while (session != NULL) {
+        int keep_session = 1;
+        struct irc_session *to_remove = NULL;
         if (FD_ISSET(session->fd, in_set)) {
-            ircd_handle_buffer(ircd, session, session->fd);
+            keep_session = ircd_handle_buffer(ircd, session);
+        }
+
+        if (!keep_session) {
+            to_remove = session;
         }
 
         session = session->next;
+
+        // ew, ugly!
+        if (!keep_session) {
+            ircd_free_session(ircd, to_remove);
+        }
     }
 }
