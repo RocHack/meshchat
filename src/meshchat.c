@@ -22,6 +22,7 @@
 #include "util.h"
 
 #define MESHCHAT_PORT "14627"
+#define MESHCHAT_PORT2 14627
 #define MESHCHAT_PACKETLEN 1400
 #define MESHCHAT_PEERFETCH_INTERVAL 60
 #define MESHCHAT_PEERSERVICE_INTERVAL 5
@@ -42,7 +43,7 @@ struct meshchat {
 
 struct peer {
     char ip[40];
-    //sockaddr_t 
+    struct sockaddr_in6 addr;
     enum peer_status status;
     time_t last_greeting;   // they sent to us
     time_t last_greeted;    // we sent to them
@@ -52,7 +53,7 @@ void handle_datagram(char *buffer, ssize_t len);
 void found_ip(void *obj, const char *ip);
 void service_peers(meshchat_t *mc);
 peer_t *peer_new(const char *ip);
-void peer_send(peer_t *peer, char *msg, size_t bytes);
+void peer_send(meshchat_t *mc, peer_t *peer, char *msg, size_t len);
 void greet_peer(meshchat_t *mc, peer_t *peer);
 
 meshchat_t *meshchat_new() {
@@ -230,17 +231,28 @@ found_ip(void *obj, const char *ip) {
 peer_t *
 peer_new(const char *ip) {
     peer_t *peer = (peer_t *)malloc(sizeof(peer_t));
-    if (peer) {
-        peer->status = PEER_UNKNOWN;
-        peer->last_greeted = -1;
-        peer->last_greeting = -1;
-        strcpy(peer->ip, ip);
+    if (!peer) {
+        return NULL;
     }
+    peer->status = PEER_UNKNOWN;
+    peer->last_greeted = -1;
+    peer->last_greeting = -1;
+    strcpy(peer->ip, ip);
+    memset(&peer->addr, 0, sizeof(peer->addr));
+    peer->addr.sin6_family = AF_INET6;
+    peer->addr.sin6_port = htons(MESHCHAT_PORT2);
+    inet_pton(AF_INET6, ip, &(peer->addr.sin6_addr));
     return peer;
 }
 
 void
-peer_send(peer_t *peer, char *msg, size_t bytes) {
+peer_send(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
+    if (sendto(mc->listener, msg, len, 0, (struct sockaddr *)&peer->addr,
+                sizeof(peer->addr)) < 0) {
+        perror("sendto");
+    }
+    //printf("sent \"%*s\" to %s\n", (int)len-1, msg,
+        //sprint_addrport((struct sockaddr *)&peer->addr));
 }
 
 static inline void
@@ -283,8 +295,8 @@ service_peers(meshchat_t *mc) {
 
 void
 greet_peer(meshchat_t *mc, peer_t *peer) {
-    char *msg = "hello";
+    static char *msg = "hello";
     //printf("greeting peer %s\n", peer->ip);
-    peer_send(peer, msg, strlen(msg)+1);
+    peer_send(mc, peer, msg, strlen(msg)+1);
     time(&peer->last_greeted);
 }
