@@ -238,24 +238,41 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
 
     len--;
     msg++;
+    const char *channel;
     switch(msg[-1]) {
         case EVENT_GREETING:
             printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
             break;
         case EVENT_MSG:
-            printf("got message from %s: \"%s\"\n", sprint_addrport(in), msg);
+            channel = msg;
+            msg += strlen(channel)+1;
+            printf("[%s] <%s> \"%s\"\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_PRIVMSG:
+            printf("<%s> \"%s\"\n", sprint_addrport(in), msg);
             break;
         case EVENT_ACTION:
+            channel = msg;
+            msg += strlen(channel)+1;
+            printf("[%s] * %s %s\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_NOTICE:
+            channel = msg;
+            msg += strlen(channel)+1;
+            printf("[%s] %s ! \"%s\"\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_JOIN:
+            channel = msg;
+            msg += strlen(channel)+1;
+            printf("[%s] %s joined\n", channel, sprint_addrport(in));
             break;
         case EVENT_PART:
+            channel = msg;
+            msg += strlen(channel)+1;
+            printf("[%s] %s parted (%s)\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_NICK:
+            printf("%s nick: %s\n", sprint_addrport(in), msg);
             break;
     };
 }
