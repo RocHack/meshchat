@@ -76,7 +76,7 @@ ircd_start(ircd_t *ircd) {
     // rest 0
 
     int status = getaddrinfo(NULL, "ircd", &hints, &result);
-    if (!status) {
+    if (status) {
         printf("getaddrinfo: ");
         puts(gai_strerror(status));
         return;
