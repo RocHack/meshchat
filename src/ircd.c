@@ -122,6 +122,7 @@ ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
             *maxfd = ircd->fd + 1;
         }
     }
+
     // wait for recv()s from clients
     struct irc_session *session = ircd->session_list;
     while (session != NULL) {
@@ -133,19 +134,43 @@ ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
     }
 }
 
+
+
 void
 ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
         fd_set *out_set) {
     struct sockaddr_storage addr;
     socklen_t addrlen = sizeof(struct sockaddr_in6);
     if (FD_ISSET(ircd->fd, in_set)) {
+        int new_fd = -1;
         // available accept
-        if (accept(ircd->fd, (struct sockaddr *)&addr, &addrlen) < 0) {
+        if ((new_fd = accept(ircd->fd, (struct sockaddr *)&addr, &addrlen)) < 0) {
             perror("accept");
-            return;
+        } else {
+            printf("accepted connection from %s\n", sprint_addrport((struct sockaddr *)&addr));
+
+            struct irc_session *new_session = (struct irc_session *)malloc(sizeof(struct irc_session));
+            new_session->fd = new_fd;
+            new_session->next = ircd->session_list;
+            ircd->session_list = new_session;
+        }
+    }
+
+    // wait for recv()s from clients
+    struct irc_session *session = ircd->session_list;
+    while (session != NULL) {
+        char buffer[MESHCHAR_MESSAGE_LEN];
+        int len;
+        if (FD_ISSET(session->fd, in_set)) {
+            if ((len = recv(session->fd, buffer, MESHCHAT_MESSAGE_LEN, 0)) < 0) {
+                perror("recv");
+                close(session->fd);
+            }
+
+            int readlen = ircd_handle_message(ircd, session, buffer, len);
         }
 
-        printf("accepted connection from %s\n", sprint_addrport((struct sockaddr *)&addr));
+        session = session->next;
     }
 }
 
