@@ -105,6 +105,11 @@ ircd_start(ircd_t *ircd) {
         return;
     }
 
+    int opt = 1;
+    if (setsockopt(ircd->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt) < 0) {
+        perror("setsockopt");
+    }
+
     if (bind(ircd->fd, result->ai_addr, result->ai_addrlen) < 0) {
         perror("bind");
         freeaddrinfo(result);
