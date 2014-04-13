@@ -133,16 +133,16 @@ ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
 void
 ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
         fd_set *out_set) {
-    struct sockaddr addr;
+    struct sockaddr_storage addr;
     socklen_t addrlen = sizeof(struct sockaddr_in6);
     if (FD_ISSET(ircd->fd, in_set)) {
         // available accept
-        if (accept(ircd->fd, &addr, &addrlen) < 0) {
+        if (accept(ircd->fd, (struct sockaddr *)&addr, &addrlen) < 0) {
             perror("accept");
             return;
         }
 
-        printf("accepted connection from %s\n", sprint_addrport(&addr));
+        printf("accepted connection from %s\n", sprint_addrport((struct sockaddr *)&addr));
     }
 }
 
