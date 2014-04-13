@@ -264,9 +264,24 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
 peer_t *
 get_peer(meshchat_t *mc, const char *ip) {
     peer_t *peer;
-    //printf("ip: %s, peers: %u\n", ip, hash_size(mc->peers));
+
+    // canonicalize the ipv6 string
+    struct in6_addr addr;
+    static char ip_copy[INET6_ADDRSTRLEN];
+    memset(&addr, 0, sizeof(addr));
+    // turn ip string to addr
+    if (inet_pton(AF_INET6, ip, &addr) < 1) {
+        perror("inet_pton");
+    }
+    // turn addr back into ip string
+    if (!inet_ntop(AF_INET6, &addr, ip_copy, INET6_ADDRSTRLEN)) {
+        perror("inet_ntop");
+    }
+
+
+    //printf("ip: %s/%s, peers: %u\n", ip, ip_copy, hash_size(mc->peers));
     if (hash_size(mc->peers)) {
-        peer = hash_get(mc->peers, (char *)ip);
+        peer = hash_get(mc->peers, (char *)ip_copy);
         if (peer) {
             // we have already seen this ip
             return peer;
@@ -275,19 +290,19 @@ get_peer(meshchat_t *mc, const char *ip) {
 
     // restrict the network to a small collection of peers, for testing
     if (1 &&
-#define IP(addr) strcmp(ip, addr) &&
+#define IP(addr) strcmp(ip_copy, addr) &&
 #include "mynetwork.def"
     1) {
         return NULL;
     }
 
     // new peer. add to the list
-    peer = peer_new(ip);
+    peer = peer_new(ip_copy);
     if (!peer) {
         fprintf(stderr, "Unable to create peer\n");
         return NULL;
     }
-    hash_set(mc->peers, (char *)ip, (void *)peer);
+    hash_set(mc->peers, (char *)ip_copy, (void *)peer);
     return peer;
 }
 
