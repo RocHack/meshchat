@@ -94,33 +94,40 @@ ircd_start(ircd_t *ircd) {
     if (bind(ircd->fd, result->ai_addr, result->ai_addrlen) < 0) {
         perror("bind");
         freeaddrinfo(result);
+        ircd->fd = -1;
         return;
     }
 
-    freeaddrinfo(result);
-
     if (listen(ircd->fd, IRCD_BACKLOG) > 0) {
         perror("listen");
+        ircd->fd = -1;
         return;
     }
 
     printf("ircd listening on %s\n", sprint_addrport(result->ai_addr));
+
+    freeaddrinfo(result);
 }
 
 void
 ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
         fd_set *out_set, int *maxfd) {
-    FD_ZERO(in_set);
-    // wait for accept()s
-    FD_SET(ircd->fd, in_set);
+    if (ircd->fd > 0) {
+        // wait for accept()s
+        FD_SET(ircd->fd, in_set);
+        if (ircd->fd > *maxfd) {
+            *maxfd = ircd->fd + 1;
+        }
+    }
     // wait for recv()s from clients
     struct irc_session *session = ircd->session_list;
     while (session != NULL) {
         FD_SET(session->fd, in_set);
+        if (session->fd > *maxfd) {
+            *maxfd = session->fd + 1;
+        }
         session = session->next;
     }
-
-    FD_ZERO(out_set);
 }
 
 void
@@ -129,7 +136,6 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
     struct sockaddr addr;
     socklen_t addrlen = sizeof(struct sockaddr_in6);
     if (FD_ISSET(ircd->fd, in_set)) {
-        return;
         // available accept
         if (accept(ircd->fd, &addr, &addrlen) < 0) {
             perror("accept");
