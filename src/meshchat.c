@@ -14,12 +14,14 @@
 #include <arpa/inet.h>
 #include "ircd.h"
 #include "meshchat.h"
+#include "cjdnsadmin.h"
 
 #define MESHCHAT_PORT "14627"
 #define MESHCHAT_PACKETLEN 1400
 
 struct meshchat {
 	ircd_t *ircd;
+	cjdnsadmin_t *cjdnsadmin;
 	const char *host;
 	const char *port;
 	int listener;
@@ -31,6 +33,13 @@ meshchat_t *meshchat_new() {
 	meshchat_t *mc = calloc(1, sizeof(meshchat_t));
 	if (!mc) {
 		perror("calloc");
+		return NULL;
+	}
+
+	mc->cjdnsadmin = cjdnsadmin_new();
+	if (!mc->cjdnsadmin) {
+		free(mc);
+		fprintf(stderr, "fail\n");
 		return NULL;
 	}
 
@@ -49,12 +58,17 @@ meshchat_t *meshchat_new() {
 
 void
 meshchat_free(meshchat_t *mc) {
+	cjdnsadmin_free(mc->cjdnsadmin);
 	free(mc);
 }
 
 void
 meshchat_start(meshchat_t *mc) {
+	// start the local IRC server
 	ircd_start(mc->ircd);
+
+	// connect to cjdns admin
+	cjdnsadmin_start(mc->cjdnsadmin);
 
 	struct addrinfo hints;
 	memset(&hints, 0, sizeof(hints));
@@ -95,6 +109,7 @@ meshchat_add_select_descriptors(meshchat_t *mc, fd_set *in_set,
 		fd_set *out_set, int *maxfd) {
 
 	ircd_add_select_descriptors(mc->ircd, in_set, out_set, maxfd);
+	cjdnsadmin_add_select_descriptors(mc->cjdnsadmin, in_set, out_set, maxfd);
 
 	int fd = mc->listener;
 
@@ -110,6 +125,7 @@ meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
 	static char buffer[MESHCHAT_PACKETLEN];
 
 	ircd_process_select_descriptors(mc->ircd, in_set, out_set);
+	cjdnsadmin_process_select_descriptors(mc->cjdnsadmin, in_set, out_set);
 
 	// check if our listener has something
 	if (!FD_ISSET(mc->listener, in_set)) {
