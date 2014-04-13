@@ -9,9 +9,8 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <string.h>
 #include "ircd.h"
-
-#define IRCD_BACKLOG 10
 
 struct ircd {
     // listener socket (TCP accept())
@@ -38,7 +37,7 @@ ircd_start(ircd_t *ircd) {
     struct addrinfo hints;
     struct addrinfo *result;
 
-    memset(hints, 0, sizeof(hints));
+    memset(&hints, 0, sizeof(hints));
     hints.ai_flags = AI_PASSIVE;
     hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_STREAM;

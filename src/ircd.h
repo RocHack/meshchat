@@ -7,6 +7,8 @@
 
 #include <sys/select.h>
 
+#define IRCD_BACKLOG 10
+
 typedef struct ircd ircd_t;
 
 ircd_t *ircd_new();
