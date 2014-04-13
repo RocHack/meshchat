@@ -44,7 +44,7 @@ struct peer {
     char ip[40];
     struct sockaddr_in6 addr;
     enum peer_status status;
-    time_t last_greeting;   // they sent to us
+    time_t last_message;    // they sent to us
     time_t last_greeted;    // we sent to them
 };
 
@@ -240,10 +240,15 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
     msg++;
     const char *channel;
     peer->status = PEER_ACTIVE;
-    time(&peer->last_greeting);
+    time_t now = time(0);
+    peer->last_message = now;
     switch(msg[-1]) {
         case EVENT_GREETING:
             printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
+            // respond back if they are new to us
+            if (difftime(now, peer->last_greeted) > MESHCHAT_PING_INTERVAL) {
+                greet_peer(mc, peer);
+            }
             break;
         case EVENT_MSG:
             channel = msg;
@@ -323,7 +328,7 @@ peer_new(const char *ip) {
     }
     peer->status = PEER_UNKNOWN;
     peer->last_greeted = -1;
-    peer->last_greeting = -1;
+    peer->last_message = -1;
     strcpy(peer->ip, ip);
     memset(&peer->addr, 0, sizeof(peer->addr));
     peer->addr.sin6_family = AF_INET6;
@@ -357,7 +362,7 @@ service_peer(meshchat_t *mc, time_t now, const char *key, peer_t *peer) {
                 // ping active peer
                 greet_peer(mc, peer);
             }
-            if (difftime(now, peer->last_greeting) > MESHCHAT_TIMEOUT) {
+            if (difftime(now, peer->last_message) > MESHCHAT_TIMEOUT) {
                 // mark unreponsive peer as timed out
                 peer->status = PEER_INACTIVE;
             }
