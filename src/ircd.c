@@ -160,6 +160,7 @@ ircd_send(ircd_t *ircd, struct irc_session *session, const char *format, ...) {
     }
     strcpy(buffer + len, "\r\n");
 
+    len += suffixlen;
     while (sv < len) {
         sv += send(session->fd, buffer + sv, len - sv, 0);
     }
