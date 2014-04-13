@@ -48,7 +48,7 @@ struct peer {
     time_t last_greeted;    // we sent to them
 };
 
-void handle_datagram(char *buffer, ssize_t len);
+void handle_datagram(struct sockaddr *addr, char *buffer, ssize_t len);
 void found_ip(void *obj, const char *ip);
 void service_peers(meshchat_t *mc);
 peer_t *peer_new(const char *ip);
@@ -174,14 +174,15 @@ meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
         } else if (count == sizeof(buffer)) {
             fprintf(stderr, "datagram too large for buffer: truncated");
         } else {
-            handle_datagram(buffer, count);
+            handle_datagram((struct sockaddr *)&src_addr, buffer, count);
         }
     }
 }
 
 void
-handle_datagram(char *buffer, ssize_t len) {
-    printf("got message: \"%*s\"\n", (int)len, buffer);
+handle_datagram(struct sockaddr *addr, char *buffer, ssize_t len) {
+    printf("%s sent: \"%*s\"\n", sprint_addrport(addr),
+            (int)len-1, buffer);
 }
 
 void
