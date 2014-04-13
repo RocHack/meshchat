@@ -1,3 +1,4 @@
+/* vim: set expandtab ts=4 sw=4: */
 /*
  * meshchat.h
  */
@@ -22,9 +23,9 @@ void meshchat_free(meshchat_t *mc);
 void meshchat_start(meshchat_t *mc);
 
 void meshchat_add_select_descriptors(meshchat_t *mc, fd_set *in_set,
-		fd_set *out_set, int *maxfd);
+        fd_set *out_set, int *maxfd);
 
 void meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
-		fd_set *out_set);
+        fd_set *out_set);
 
 #endif /* MESHCHAT_H */
