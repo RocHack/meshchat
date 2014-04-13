@@ -49,7 +49,8 @@ struct peer {
 };
 
 enum event_type {
-    EVENT_MSG = 1,
+    EVENT_GREETING = 1,
+    EVENT_MSG,
     EVENT_PRIVMSG,
     EVENT_ACTION,
     EVENT_NOTICE,
@@ -58,7 +59,8 @@ enum event_type {
     EVENT_NICK,
 };
 
-void handle_datagram(struct sockaddr *addr, char *buffer, ssize_t len);
+void handle_datagram(meshchat_t *mc, struct sockaddr *addr, char *buffer, ssize_t len);
+peer_t *get_peer(meshchat_t *mc, const char *ip);
 void found_ip(void *obj, const char *ip);
 void service_peers(meshchat_t *mc);
 peer_t *peer_new(const char *ip);
@@ -202,24 +204,71 @@ meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
         } else if (count == sizeof(buffer)) {
             fprintf(stderr, "datagram too large for buffer: truncated");
         } else {
-            handle_datagram((struct sockaddr *)&src_addr, buffer, count);
+            handle_datagram(mc, (struct sockaddr *)&src_addr, buffer, count);
         }
     }
 }
 
 void
-handle_datagram(struct sockaddr *addr, char *buffer, ssize_t len) {
-    printf("%s sent: \"%*s\"\n", sprint_addrport(addr),
-            (int)len-1, buffer+1);
+handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
+    //printf("%s sent (%u, %zd): \"%*s\"\n", sprint_addrport(in),
+            //msg[0], len, (int)len-1, msg+1);
+    peer_t *peer;
+    // sanitize msg, maybe
+    msg[len] = '\0';
+
+    if (!hash_size(mc->peers)) {
+        // got a message without peers. :(
+        return;
+    }
+    static char ip[INET6_ADDRSTRLEN];
+
+    // convert ip to string
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)in;
+    if (!inet_ntop(AF_INET6, &(addr->sin6_addr), ip, INET6_ADDRSTRLEN)) {
+        perror("inet_ntop");
+        return;
+    }
+    peer = get_peer(mc, ip);
+    if (!peer) {
+        fprintf(stderr, "Unable to handle message from peer %s: \"%s\"\n",
+                sprint_addrport(in), msg);
+        return;
+    }
+
+    len--;
+    msg++;
+    switch(msg[-1]) {
+        case EVENT_GREETING:
+            printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
+            break;
+        case EVENT_MSG:
+            printf("got message from %s: \"%s\"\n", sprint_addrport(in), msg);
+            break;
+        case EVENT_PRIVMSG:
+            break;
+        case EVENT_ACTION:
+            break;
+        case EVENT_NOTICE:
+            break;
+        case EVENT_JOIN:
+            break;
+        case EVENT_PART:
+            break;
+        case EVENT_NICK:
+            break;
+    };
 }
 
-void
-found_ip(void *obj, const char *ip) {
-    meshchat_t *mc = (meshchat_t *)obj;
+// lookup a peer by ip, adding it if it is new
+peer_t *
+get_peer(meshchat_t *mc, const char *ip) {
+    peer_t *peer;
     //printf("ip: %s, peers: %u\n", ip, hash_size(mc->peers));
-    if (hash_size(mc->peers) && hash_has(mc->peers, (char *)ip)) {
+    if (hash_size(mc->peers)) {
+        peer = hash_get(mc->peers, (char *)ip);
         // we have already seen this ip
-        return;
+        return peer;
     }
 
     // restrict the network to a small collection of peers, for testing
@@ -227,17 +276,23 @@ found_ip(void *obj, const char *ip) {
 #define IP(addr) strcmp(ip, addr) &&
 #include "mynetwork.def"
     1) {
-        return;
+        return NULL;
     }
 
     // new peer. add to the list
-    peer_t *peer = peer_new(ip);
+    peer = peer_new(ip);
     if (!peer) {
         fprintf(stderr, "Unable to create peer\n");
-        return;
+        return NULL;
     }
     hash_set(mc->peers, (char *)ip, (void *)peer);
-    //printf("ip: %s\n", ip);
+    return peer;
+}
+
+void
+found_ip(void *obj, const char *ip) {
+    meshchat_t *mc = (meshchat_t *)obj;
+    get_peer(mc, ip);
 }
 
 peer_t *
@@ -331,9 +386,14 @@ service_peers(meshchat_t *mc) {
 
 void
 greet_peer(meshchat_t *mc, peer_t *peer) {
-    static char *msg = "hello";
+    static char msg[MESHCHAT_PACKETLEN];
     //printf("greeting peer %s\n", peer->ip);
+    const char *rooms = "#rochack";
+    // todo: get rooms
+    msg[0] = EVENT_GREETING;
+    strncpy(msg+1, rooms, sizeof(msg)-1);
     peer_send(mc, peer, msg, strlen(msg)+1);
+    //printf("msg: [%d] %s\n", msg[0], msg+1);
     time(&peer->last_greeted);
 }
 
