@@ -54,6 +54,7 @@ void service_peers(meshchat_t *mc);
 peer_t *peer_new(const char *ip);
 void peer_send(meshchat_t *mc, peer_t *peer, char *msg, size_t len);
 void greet_peer(meshchat_t *mc, peer_t *peer);
+void on_irc_msg(void *obj, char *channel, char *data);
 
 meshchat_t *meshchat_new() {
     meshchat_t *mc = calloc(1, sizeof(meshchat_t));
@@ -79,7 +80,11 @@ meshchat_t *meshchat_new() {
     // add callback for peer discovery through cjdns
     cjdnsadmin_on_found_ip(mc->cjdnsadmin, found_ip, (void *)mc);
 
-    mc->ircd = ircd_new();
+    ircd_callbacks_t callbacks = {
+        .on_msg = {(void *)mc, on_irc_msg}
+    };
+
+    mc->ircd = ircd_new(&callbacks);
     if (!mc->ircd) {
         fprintf(stderr, "fail\n");
         exit(1);
@@ -283,4 +288,8 @@ greet_peer(meshchat_t *mc, peer_t *peer) {
     //printf("greeting peer %s\n", peer->ip);
     peer_send(mc, peer, msg, strlen(msg)+1);
     time(&peer->last_greeted);
+}
+
+void
+on_irc_msg(void *obj, char *channel, char *data) {
 }

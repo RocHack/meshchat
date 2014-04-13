@@ -45,9 +45,10 @@ struct ircd {
     // connected sessions (LL)
     struct irc_session *session_list;
     struct irc_channel *channel_list;
+    ircd_callbacks_t callbacks;
 };
 
-ircd_t *ircd_new() {
+ircd_t *ircd_new(ircd_callbacks_t *callbacks) {
     ircd_t *ircd = calloc(1, sizeof(ircd_t));
     if (!ircd) {
         perror("calloc");
@@ -57,6 +58,8 @@ ircd_t *ircd_new() {
     ircd->fd = -1;
     ircd->session_list = NULL;
     ircd->channel_list = NULL;
+
+    memcpy(&ircd->callbacks, callbacks, sizeof(ircd_callbacks_t));
 
     return ircd;
 }

@@ -12,7 +12,22 @@
 
 typedef struct ircd ircd_t;
 
-ircd_t *ircd_new();
+typedef struct {
+    void *obj;
+    void (*fn) (void *obj, char *channel, char *data);
+} callback_t;
+
+typedef struct {
+    callback_t on_msg;
+    callback_t on_privmsg;
+    callback_t on_action;
+    callback_t on_notice;
+    callback_t on_join;
+    callback_t on_part;
+    callback_t on_nick;
+} ircd_callbacks_t;
+
+ircd_t *ircd_new(ircd_callbacks_t *callbacks);
 
 void ircd_free(ircd_t *ircd);
 
