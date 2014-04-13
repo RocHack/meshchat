@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "cjdnsadmin.h"
+#include "util.h"
 
 #define CJDNSADMIN_PORT "11234"
 #define CJDNSADMIN_HOST "127.0.0.1"
@@ -60,14 +61,7 @@ void cjdnsadmin_start(cjdnsadmin_t *adm) {
         perror("bind");
     }
 
-    struct sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
-    char addr_str[INET6_ADDRSTRLEN];
-    if (!inet_ntop(AF_INET, &(addr->sin_addr), addr_str, INET_ADDRSTRLEN)) {
-        perror("inet_ntop");
-        addr_str[0] = '\0';
-    }
-
-    printf("connected to cjdns admin at %s:%s\n", addr_str, adm->port);
+    printf("connected to cjdns admin at %s\n", sprint_addrport(res->ai_addr));
 }
 
 void cjdnsadmin_fetch_peers(cjdnsadmin_t *adm, on_fetch_peers_t *cb, void *obj)

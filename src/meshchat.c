@@ -16,6 +16,7 @@
 #include "ircd.h"
 #include "meshchat.h"
 #include "cjdnsadmin.h"
+#include "util.h"
 
 #define MESHCHAT_PORT "14627"
 #define MESHCHAT_PACKETLEN 1400
@@ -100,7 +101,7 @@ meshchat_start(meshchat_t *mc) {
         addr_str[0] = '\0';
     }
 
-    printf("meshchat bound to [%s]:%s\n", addr_str, mc->port);
+    printf("meshchat bound to %s\n", sprint_addrport(res->ai_addr));
 
     freeaddrinfo(res);
 }

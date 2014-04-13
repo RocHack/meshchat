@@ -13,6 +13,7 @@
 #include <string.h>
 #include "ircd.h"
 #include "meshchat.h"
+#include "util.h"
 
 struct irc_session {
     // fd socket (TCP recv())
@@ -47,17 +48,17 @@ struct ircd {
 };
 
 ircd_t *ircd_new() {
-	ircd_t *ircd = calloc(1, sizeof(ircd_t));
-	if (!ircd) {
-		perror("calloc");
-		return NULL;
-	}
+    ircd_t *ircd = calloc(1, sizeof(ircd_t));
+    if (!ircd) {
+        perror("calloc");
+        return NULL;
+    }
 
     ircd->fd = -1;
     ircd->session_list = NULL;
     ircd->channel_list = NULL;
 
-	return ircd;
+    return ircd;
 }
 
 void
@@ -103,23 +104,39 @@ ircd_start(ircd_t *ircd) {
         return;
     }
 
-    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)result->ai_addr;
-    char addr_str[INET6_ADDRSTRLEN];
-    if (!inet_ntop(AF_INET6, &(addr->sin6_addr), addr_str, INET6_ADDRSTRLEN)) {
-        perror("inet_ntop");
-        addr_str[0] = '\0';
+    printf("ircd listening on %s\n", sprint_addrport(result->ai_addr));
+}
+
+void
+ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
+        fd_set *out_set, int *maxfd) {
+    FD_ZERO(in_set);
+    // wait for accept()s
+    FD_SET(ircd->fd, in_set);
+    // wait for recv()s from clients
+    struct irc_session *session = ircd->session_list;
+    while (session != NULL) {
+        FD_SET(session->fd, in_set);
+        session = session->next;
     }
 
-    printf("ircd listening on [%s]:%d\n", addr_str, ntohs(addr->sin6_port));
+    FD_ZERO(out_set);
 }
 
 void
-ircd_add_select_descriptors(ircd_t *mc, fd_set *in_set,
-		fd_set *out_set, int *maxfd) {
-    
+ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
+        fd_set *out_set) {
+    struct sockaddr addr;
+    socklen_t addrlen = sizeof(struct sockaddr_in6);
+    if (FD_ISSET(ircd->fd, in_set)) {
+        return;
+        // available accept
+        if (accept(ircd->fd, &addr, &addrlen) < 0) {
+            perror("accept");
+            return;
+        }
+
+        printf("accepted connection from %s\n", sprint_addrport(&addr));
+    }
 }
 
-void
-ircd_process_select_descriptors(ircd_t *mc, fd_set *in_set,
-		fd_set *out_set) {
-}
