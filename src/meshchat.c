@@ -244,7 +244,9 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
         case EVENT_GREETING:
             printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
             // respond back if they are new to us
-            if (difftime(now, peer->last_greeted) > MESHCHAT_PING_INTERVAL) {
+            if (peer->status != PEER_ACTIVE ||
+                    difftime(now, peer->last_greeted) > MESHCHAT_PING_INTERVAL) {
+                //printf("responding to new\n");
                 greet_peer(mc, peer);
             }
             break;
@@ -380,8 +382,8 @@ static inline void
 broadcast_all_peer(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
     // send only to active peer
     if (peer->status == PEER_ACTIVE) {
-        msg[len] = '\0';
-        printf("sending %s\n", (char *)msg);
+        printf("sending %s to %s\n", (char *)msg,
+            sprint_addrport((struct sockaddr *)&peer->addr));
         peer_send(mc, peer, msg, len);
     }
 }
@@ -482,12 +484,10 @@ on_irc_part(void *obj, char *channel, char *data) {
 
 void
 on_irc_nick(void *obj, char *channel, char *data) {
-    (void)channel;
     meshchat_t *mc = (meshchat_t *)obj;
     static char msg[MESHCHAT_PACKETLEN];
     size_t len = strlen(data)+1;
     msg[0] = EVENT_NICK;
-    // todo: don't bother writing null bytes up to the end of the buffer
     strncpy(msg+1, data, len);
     broadcast_all(mc, msg, 1+len);
 }
