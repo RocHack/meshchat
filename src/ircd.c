@@ -210,10 +210,38 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
             clen++;
         }
         strncpy(message, lineptr + 9 + clen, MESHCHAT_MESSAGE_LEN);
-        printf("CLIENT in %s: %s\n", channel, message);
-        callback_call(ircd->callbacks.on_msg, channel, message);
+        // check for CTCP message (surrounded with 0x01)
+        if (message[0] == 0x01) {
+            message[strlen(message)-1] = '\0';
+            if (strncmp(message+1, "ACTION ", 7) == 0) {
+                printf("message: \"%s\"\n", message+8);
+                callback_call(ircd->callbacks.on_action, channel, message+8);
+            } else {
+                printf("message: (%zu) \"%s\"\n", strlen(message+1), message+1);
+            }
+        } else {
+            printf("CLIENT in %s: %s\n", channel, message);
+            callback_call(ircd->callbacks.on_msg, channel, message);
+        }
         //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
         //printf("NICK %s\n", ircd->nick);
+    } else if (strncmp(lineptr, "NOTICE ", 7) == 0) {
+        // check for CTCP message (surrounded with 0x01)
+        if (lineptr[7] == 0x01) {
+            //message[strlen(message)-1] = '\0';
+            printf("notice! \"%s\"\n", lineptr+8);
+        } else {
+            char channel[MESHCHAT_CHANNEL_LEN];
+            char message[MESHCHAT_MESSAGE_LEN];
+            int clen = strwncpy(channel, lineptr + 7, MESHCHAT_CHANNEL_LEN);
+            if (lineptr[clen + 8] == ':') {
+                // skip colon/prefix
+                clen++;
+            }
+            strncpy(message, lineptr + 8 + clen, MESHCHAT_MESSAGE_LEN);
+            printf("notice in %s: \"%s\"\n", channel, message);
+            callback_call(ircd->callbacks.on_notice, channel, message);
+        }
     } else if (strncmp(lineptr, "PING ", 5) == 0) {
         ircd_send(ircd, session, "PONG localhost", ircd->username);
     }

@@ -261,22 +261,22 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
         case EVENT_ACTION:
             channel = msg;
             msg += strlen(channel)+1;
-            printf("[%s] * %s %s\n", channel, sprint_addrport(in), msg);
+            printf("[%s] * %s \"%s\"\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_NOTICE:
             channel = msg;
             msg += strlen(channel)+1;
-            printf("[%s] %s ! \"%s\"\n", channel, sprint_addrport(in), msg);
+            printf("[%s] <%s> ! \"%s\"\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_JOIN:
             channel = msg;
             msg += strlen(channel)+1;
-            printf("[%s] %s joined\n", channel, sprint_addrport(in));
+            printf("[%s] <%s joined>\n", channel, sprint_addrport(in));
             break;
         case EVENT_PART:
             channel = msg;
             msg += strlen(channel)+1;
-            printf("[%s] %s parted (%s)\n", channel, sprint_addrport(in), msg);
+            printf("[%s] <%s parted> (%s)\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_NICK:
             printf("%s nick: %s\n", sprint_addrport(in), msg);
@@ -383,21 +383,19 @@ broadcast_all_peer(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
     // send only to active peer
     if (peer->status == PEER_ACTIVE) {
         peer_send(mc, peer, msg, len);
-        printf("sending (%u) %s to %s\n", msg[0], msg+1, peer->ip);
+        printf("sending (%x) %s to %s\n", msg[0], msg+1, peer->ip);
     }
 }
 
 // send a message to all active peers
 void
 broadcast_all(meshchat_t *mc, char *msg, size_t len) {
-    if (len > MESHCHAT_PACKETLEN) len = MESHCHAT_PACKETLEN;
     hash_each_val(mc->peers, broadcast_all_peer(mc, val, msg, len));
 }
 
 // send a message to all active peers in a channel
 void
 broadcast_channel(meshchat_t *mc, char *channel, void *msg, size_t len) {
-    if (len > MESHCHAT_PACKETLEN) len = MESHCHAT_PACKETLEN;
     // todo: broadcast only to channel
     broadcast_all(mc, msg, len);
     //hash_each_val(mc->peers, broadcast_active_peer(mc, val, msg, len));
@@ -425,27 +423,37 @@ greet_peer(meshchat_t *mc, peer_t *peer) {
 }
 
 void
+broadcast_event(meshchat_t *mc, enum event_type ev, char *channel, char *data) {
+    static char msg[MESHCHAT_PACKETLEN];
+    size_t channel_len = strlen(channel);
+    size_t data_len = strlen(data);
+    msg[0] = ev;
+    if (channel_len > MESHCHAT_CHANNEL_LEN) channel_len = MESHCHAT_CHANNEL_LEN;
+    if (data_len > MESHCHAT_MESSAGE_LEN) data_len = MESHCHAT_MESSAGE_LEN;
+
+    strncpy(msg + 1, channel, channel_len);
+    msg[1 + channel_len] = '\0';
+    strncpy(msg + 2 + channel_len, data, data_len);
+    msg[2 + channel_len + data_len] = '\0';
+    broadcast_channel(mc, channel, msg, 3 + channel_len + data_len);
+}
+
+void
 on_irc_msg(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
-    static char msg[MESHCHAT_PACKETLEN];
-    size_t channel_len = strlen(channel)+1;
-    size_t data_len = strlen(data)+1;
-    // todo: check for buffer overrun
-    msg[0] = EVENT_MSG;
-    // include null byte as seperator
-    strncpy(msg + 1, channel, channel_len);
-    strncpy(msg + 1 + channel_len, data, data_len);
-    broadcast_channel(mc, channel, msg, 1 + channel_len + data_len);
+    broadcast_event(mc, EVENT_MSG, channel, data);
 }
 
 void
 on_irc_action(void *obj, char *channel, char *data) {
-    // todo
+    meshchat_t *mc = (meshchat_t *)obj;
+    broadcast_event(mc, EVENT_ACTION, channel, data);
 }
 
 void
 on_irc_notice(void *obj, char *channel, char *data) {
-    // todo
+    meshchat_t *mc = (meshchat_t *)obj;
+    broadcast_event(mc, EVENT_NOTICE, channel, data);
 }
 
 void
