@@ -310,7 +310,7 @@ get_peer(meshchat_t *mc, const char *ip) {
         fprintf(stderr, "Unable to create peer\n");
         return NULL;
     }
-    hash_set(mc->peers, (char *)ip_copy, (void *)peer);
+    hash_set(mc->peers, peer->ip, (void *)peer);
     return peer;
 }
 
@@ -382,9 +382,8 @@ static inline void
 broadcast_all_peer(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
     // send only to active peer
     if (peer->status == PEER_ACTIVE) {
-        printf("sending %s to %s\n", (char *)msg,
-            sprint_addrport((struct sockaddr *)&peer->addr));
         peer_send(mc, peer, msg, len);
+        printf("sending (%u) %s to %s\n", msg[0], msg+1, peer->ip);
     }
 }
 
