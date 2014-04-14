@@ -272,11 +272,12 @@ ircd_handle_buffer(ircd_t *ircd, struct irc_session *session) {
     if (max_len > MESHCHAT_MESSAGE_LEN) {
         max_len = MESHCHAT_MESSAGE_LEN; // MUST be <= 512 chars per line
     }
-    while ( (line_end = (char*)memchr((void*)line_start, '\n', session->inbuf_used - (line_start - session->inbuf))))
+    // TODO: handle \r or \n here
+    while ( (line_end = (char*)memchr((void*)line_start, '\r', session->inbuf_used - (line_start - session->inbuf))))
     {
         *line_end = 0;
         ircd_handle_message(ircd, session, line_start);
-        line_start = line_end + 1;
+        line_start = line_end + 2;
     }
     /* Shift buffer down so the unprocessed data is at the start */
     // printf("%d used %d read %d left\n", session->inbuf_used, rv, session->inbuf - line_start);
