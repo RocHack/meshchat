@@ -13,6 +13,12 @@
 
 typedef struct ircd ircd_t;
 
+struct irc_prefix {
+    const char *nick;
+    const char *user;
+    const char *host;
+};
+
 typedef struct {
     void *obj;
     void (*fn) (void *obj, char *channel, char *data);
@@ -41,5 +47,10 @@ void ircd_add_select_descriptors(ircd_t *mc, fd_set *in_set,
 
 void ircd_process_select_descriptors(ircd_t *mc, fd_set *in_set,
         fd_set *out_set);
+
+void ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *nick);
+
+void ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
+        const char *msg);
 
 #endif /* IRCD_H */

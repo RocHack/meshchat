@@ -157,16 +157,36 @@ ircd_add_select_descriptors(ircd_t *ircd, fd_set *in_set,
     }
 }
 
+int sprint_prefix(char *buffer, struct irc_prefix *prefix) {
+    if (prefix->nick) {
+        if (prefix->host) {
+            if (prefix->user) {
+                return sprintf(buffer, ":%s!~%s@%s ", prefix->nick, prefix->user,
+                        prefix->host);
+            } else {
+                return sprintf(buffer, ":%s@%s ", prefix->nick, prefix->host);
+            }
+        } else {
+            return sprintf(buffer, ":%s ", prefix->nick);
+        }
+    } else if (prefix->host) {
+        return sprintf(buffer, ":%s ", prefix->host);
+    } else {
+        return 0;
+    }
+}
+
 void
-ircd_send(ircd_t *ircd, struct irc_session *session, const char *format, ...) {
+ircd_send(ircd_t *ircd, struct irc_session *session, struct irc_prefix *prefix,
+        const char *format, ...) {
     char buffer[MESHCHAT_MESSAGE_LEN]; // 512
     va_list ap;
-    size_t prefixlen = 11;
+    size_t prefixlen;
     size_t suffixlen = 2;
     int len = 0;
     int sv = 0;
 
-    strcpy(buffer, ":localhost ");
+    prefixlen = prefix ? sprint_prefix(buffer, prefix) : 0;
 
     va_start(ap, format);
     len = vsnprintf(buffer + prefixlen, MESHCHAT_MESSAGE_LEN - prefixlen - suffixlen, format, ap);
@@ -196,15 +216,15 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
     } else if (strncmp(lineptr, "USER ", 5) == 0) {
         // NICK username
         strwncpy(ircd->username, lineptr + 5, MESHCHAT_FULLNAME_LEN);
-        ircd_send(ircd, session, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->username);
-        ircd_send(ircd, session, "002 %s :IRC MeshChat v1", ircd->username);
-        ircd_send(ircd, session, "003 %s :Created 0", ircd->username);
-        ircd_send(ircd, session, "004 %s localhost ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->username);
+        ircd_send(ircd, session, NULL, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->username);
+        ircd_send(ircd, session, NULL, "002 %s :IRC MeshChat v1", ircd->username);
+        ircd_send(ircd, session, NULL, "003 %s :Created 0", ircd->username);
+        ircd_send(ircd, session, NULL, "004 %s localhost ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->username);
         //printf("NICK %s\n", ircd->nick);
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
         // NICK username
-        callback_call(ircd->callbacks.on_join, lineptr + 5, NULL);
-        printf("CLIENT WANTS TO JOIN %s\n", lineptr + 5);
+        callback_call(ircd->callbacks.on_join, lineptr + 5, ircd->nick);
+        //printf("CLIENT WANTS TO JOIN %s\n", lineptr + 5);
         //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
         //printf("NICK %s\n", ircd->nick);
     } else if (strncmp(lineptr, "PRIVMSG ", 8) == 0) {
@@ -250,7 +270,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
             callback_call(ircd->callbacks.on_notice, channel, message);
         }
     } else if (strncmp(lineptr, "PING ", 5) == 0) {
-        ircd_send(ircd, session, "PONG localhost", ircd->username);
+        ircd_send(ircd, session, NULL, "PONG localhost", ircd->username);
     }
 }
 
@@ -364,5 +384,20 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
         if (!keep_session) {
             ircd_free_session(ircd, to_remove);
         }
+    }
+}
+
+void
+ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
+    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+        ircd_send(ircd, sess, prefix, "JOIN :%s", channel);
+    }
+}
+
+void
+ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
+        const char *msg) {
+    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+        ircd_send(ircd, sess, prefix, "PRIVMSG %s :%s", target, msg);
     }
 }
