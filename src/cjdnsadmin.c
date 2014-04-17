@@ -153,7 +153,6 @@ void handle_message(cjdnsadmin_t *adm, char *buffer, ssize_t len) {
         cjdnsadmin_fetch_peers(adm);
     } else {
         // start from the first page next time
-        printf("fetched peers\n");
         adm->fetch_peers_page = 0;
     }
     free(b);

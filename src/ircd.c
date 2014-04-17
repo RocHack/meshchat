@@ -77,6 +77,13 @@ ircd_t *ircd_new(ircd_callbacks_t *callbacks) {
 
 void
 ircd_free(ircd_t *ircd) {
+    struct irc_session *session = ircd->session_list, *next;
+    while (session) {
+        next = session->next;
+        free(session);
+        session = next;
+    }
+    free(ircd);
 }
 
 void

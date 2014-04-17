@@ -59,7 +59,8 @@ enum event_type {
     EVENT_NICK,
 };
 
-void handle_datagram(meshchat_t *mc, struct sockaddr *addr, char *buffer, ssize_t len);
+void handle_datagram(meshchat_t *mc, struct sockaddr *addr, const char *buffer,
+        ssize_t len);
 peer_t *get_peer(meshchat_t *mc, const char *ip);
 void found_ip(void *obj, const char *ip);
 void service_peers(meshchat_t *mc);
@@ -100,13 +101,13 @@ meshchat_t *meshchat_new() {
     cjdnsadmin_on_found_ip(mc->cjdnsadmin, found_ip, (void *)mc);
 
     ircd_callbacks_t callbacks = {
-        .on_msg = {(void *)mc, on_irc_msg},
-        .on_privmsg = {(void *)mc, on_irc_privmsg},
-        .on_part = {(void *)mc, on_irc_part},
-        .on_join = {(void *)mc, on_irc_join},
-        .on_nick = {(void *)mc, on_irc_nick},
-        .on_action = {(void *)mc, on_irc_action},
-        .on_notice = {(void *)mc, on_irc_notice},
+        .on_msg     = {mc, on_irc_msg},
+        .on_privmsg = {mc, on_irc_privmsg},
+        .on_part    = {mc, on_irc_part},
+        .on_join    = {mc, on_irc_join},
+        .on_nick    = {mc, on_irc_nick},
+        .on_action  = {mc, on_irc_action},
+        .on_notice  = {mc, on_irc_notice},
     };
 
     mc->ircd = ircd_new(&callbacks);
@@ -210,7 +211,7 @@ meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
 }
 
 void
-handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, ssize_t len) {
+handle_datagram(meshchat_t *mc, struct sockaddr *in, const char *msg, ssize_t len) {
     //printf("%s sent (%u, %zd): \"%*s\"\n", sprint_addrport(in),
             //msg[0], len, (int)len-1, msg+1);
     peer_t *peer;
