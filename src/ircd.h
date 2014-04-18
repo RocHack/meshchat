@@ -42,6 +42,8 @@ void ircd_free(ircd_t *ircd);
 
 void ircd_start(ircd_t *ircd);
 
+void ircd_set_hostname(ircd_t *ircd, const char *host);
+
 void ircd_add_select_descriptors(ircd_t *mc, fd_set *in_set,
         fd_set *out_set, int *maxfd);
 

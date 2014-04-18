@@ -47,13 +47,12 @@ struct ircd {
     char nick[MESHCHAT_NAME_LEN]; // 9
     char username[MESHCHAT_FULLNAME_LEN]; // 32
     char realname[MESHCHAT_FULLNAME_LEN]; // 32
+    const char *host;
     // connected sessions (LL)
     struct irc_session *session_list;
     struct irc_channel *channel_list;
     ircd_callbacks_t callbacks;
 };
-
-static const struct irc_prefix localhost = {.host = "localhost"};
 
 void ircd_free_session(ircd_t *ircd, struct irc_session *session);
 
@@ -78,6 +77,11 @@ ircd_t *ircd_new(ircd_callbacks_t *callbacks) {
     memcpy(&ircd->callbacks, callbacks, sizeof(ircd_callbacks_t));
 
     return ircd;
+}
+
+void
+ircd_set_hostname(ircd_t *ircd, const char *host) {
+    ircd->host = host;
 }
 
 void
@@ -213,19 +217,20 @@ ircd_send(ircd_t *ircd, struct irc_session *session, struct irc_prefix *prefix,
 void
 ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *lineptr) {
+    struct irc_prefix prefix = {
+        .nick = ircd->nick,
+        .user = ircd->username,
+        .host = ircd->host
+    };
     if (strncmp(lineptr, "NICK ", 5) == 0) {
         char oldnick[MESHCHAT_NAME_LEN];
-        struct irc_prefix prefix = {
-            .nick = oldnick,
-            .user = ircd->username,
-            .host = session->ip
-        };
+        prefix.nick = oldnick;
         strncpy(oldnick, ircd->nick, MESHCHAT_NAME_LEN);
         strwncpy(ircd->nick, lineptr + 5, MESHCHAT_NAME_LEN);
         callback_call(ircd->callbacks.on_nick, NULL, ircd->nick);
         if (oldnick[0]) {
             // acknowledge nick change
-            ircd_send(ircd, session, &prefix, "NICK :%s", ircd->nick);
+            ircd_nick(ircd, &prefix, ircd->nick);
         }
 
     } else if (strncmp(lineptr, "USER ", 5) == 0) {

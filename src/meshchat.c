@@ -196,6 +196,7 @@ meshchat_start(meshchat_t *mc) {
         perror("inet_ntop");
     } else {
         mc->me = get_peer(mc, mc->ip);
+        ircd_set_hostname(mc->ircd, mc->ip);
     }
 
     if (bind(fd, addr, sizeof(*addr6)) < 0) {
