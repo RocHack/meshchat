@@ -237,7 +237,14 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         ircd_send(ircd, session, NULL, "004 %s localhost ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->username);
 
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
-        callback_call(ircd->callbacks.on_join, lineptr + 5, ircd->nick);
+        char *channel = lineptr + 5;
+        callback_call(ircd->callbacks.on_join, channel, ircd->nick);
+        ircd_join(ircd, &prefix, channel);
+
+    } else if (strncmp(lineptr, "PART ", 5) == 0) {
+        char *channel = lineptr + 5;
+        callback_call(ircd->callbacks.on_part, channel, ircd->nick);
+        ircd_part(ircd, &prefix, channel);
 
     } else if (strncmp(lineptr, "PRIVMSG ", 8) == 0) {
         char channel[MESHCHAT_CHANNEL_LEN];
@@ -293,6 +300,10 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         close(session->fd);
         session->fd = -1;
         //ircd_free_session(ircd, session);
+
+    } else if (strncmp(lineptr, "PASS ", 5) == 0) {
+        // TODO
+        return;
 
     } else {
         printf("Unhandled message: %s\n", lineptr);
@@ -420,6 +431,13 @@ ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
     // send to all sessions
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "JOIN :%s", channel);
+    }
+}
+
+void
+ircd_part(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
+    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+        ircd_send(ircd, sess, prefix, "PART %s", channel);
     }
 }
 

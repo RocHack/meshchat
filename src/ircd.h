@@ -48,7 +48,9 @@ void ircd_add_select_descriptors(ircd_t *mc, fd_set *in_set,
 void ircd_process_select_descriptors(ircd_t *mc, fd_set *in_set,
         fd_set *out_set);
 
-void ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *nick);
+void ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel);
+
+void ircd_part(ircd_t *ircd, struct irc_prefix *prefix, const char *channel);
 
 void ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
         const char *msg);
