@@ -286,6 +286,9 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
     }
 
     const char *channel;
+    if (peer->status != PEER_ACTIVE) {
+        printf("Peer woke up: %s\n", peer->ip);
+    }
     peer->status = PEER_ACTIVE;
     time_t now = time(0);
     peer->last_message = now;
@@ -333,6 +336,7 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
             channel = msg;
             msg += strlen(channel)+1;
             printf("[%s] * %s \"%s\"\n", channel, sprint_addrport(in), msg);
+            ircd_action(mc->ircd, &prefix, channel, msg);
             break;
         case EVENT_NOTICE:
             channel = msg;

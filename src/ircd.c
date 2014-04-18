@@ -219,7 +219,9 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *lineptr) {
     struct irc_prefix prefix = {
         .nick = ircd->nick,
-        .user = ircd->username,
+        //.user = ircd->username,
+        //.user = NULL,
+        //.user = ircd->nick,
         .host = ircd->host
     };
     if (strncmp(lineptr, "NICK ", 5) == 0) {
@@ -236,10 +238,10 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
     } else if (strncmp(lineptr, "USER ", 5) == 0) {
         // NICK username
         strwncpy(ircd->username, lineptr + 5, MESHCHAT_FULLNAME_LEN);
-        ircd_send(ircd, session, NULL, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->username);
-        ircd_send(ircd, session, NULL, "002 %s :IRC MeshChat v1", ircd->username);
-        ircd_send(ircd, session, NULL, "003 %s :Created 0", ircd->username);
-        ircd_send(ircd, session, NULL, "004 %s localhost ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->username);
+        ircd_send(ircd, session, NULL, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->nick);
+        ircd_send(ircd, session, NULL, "002 %s :IRC MeshChat v1", ircd->nick);
+        ircd_send(ircd, session, NULL, "003 %s :Created 0", ircd->nick);
+        ircd_send(ircd, session, NULL, "004 %s %s ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->nick, ircd->host);
 
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
         char *channel = lineptr + 5;
@@ -292,7 +294,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         }
 
     } else if (strncmp(lineptr, "PING ", 5) == 0) {
-        ircd_send(ircd, session, NULL, "PONG localhost", ircd->username);
+        ircd_send(ircd, session, NULL, "PONG %s", lineptr + 5);
 
     } else if (strncmp(lineptr, "MODE ", 5) == 0) {
         return;
@@ -451,6 +453,14 @@ ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
         const char *msg) {
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "PRIVMSG %s :%s", target, msg);
+    }
+}
+
+void
+ircd_action(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
+        const char *msg) {
+    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+        ircd_send(ircd, sess, prefix, "PRIVMSG %s :\1ACTION %s\1", target, msg);
     }
 }
 
