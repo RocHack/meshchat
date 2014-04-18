@@ -409,6 +409,7 @@ peer_new(const char *ip) {
     peer->status = PEER_UNKNOWN;
     peer->last_greeted = -1;
     peer->last_message = -1;
+    peer->nick = NULL;
     strcpy(peer->ip, ip);
     memset(&peer->addr, 0, sizeof(peer->addr));
     peer->addr.sin6_family = AF_INET6;
