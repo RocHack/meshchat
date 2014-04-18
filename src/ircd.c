@@ -33,6 +33,7 @@ struct irc_user {
     char username[MESHCHAT_FULLNAME_LEN]; // 32
     char realname[MESHCHAT_FULLNAME_LEN]; // 32
     char host[MESHCHAT_HOST_LEN]; // 63
+    bool is_me;
     struct irc_user *next;
 };
 
@@ -55,11 +56,12 @@ struct ircd {
     struct irc_session *session_list;
     struct irc_channel *channel_list;
     ircd_callbacks_t callbacks;
+    struct irc_prefix prefix;
 };
 
 void ircd_free_session(ircd_t *ircd, struct irc_session *session);
 struct irc_channel *ircd_get_channel(ircd_t *ircd, const char *channel);
-bool irc_channel_add_nick(struct irc_channel *channel, const char *nick);
+bool irc_channel_add_nick(struct irc_channel *channel, const char *nick, const char *ip, bool is_me);
 void irc_session_welcome(ircd_t *ircd, struct irc_session *session);
 void irc_session_join(ircd_t *ircd, struct irc_session *session,
         struct irc_prefix *prefix, struct irc_channel *channel);
@@ -92,6 +94,7 @@ ircd_t *ircd_new(ircd_callbacks_t *callbacks) {
 void
 ircd_set_hostname(ircd_t *ircd, const char *host) {
     ircd->host = host;
+    ircd->prefix.host = host;
 }
 
 void
@@ -248,7 +251,7 @@ irc_session_welcome(ircd_t *ircd, struct irc_session *session) {
 
 void
 ircd_handle_message(ircd_t *ircd, struct irc_session *session,
-        char *lineptr) {
+        char *lineptr, size_t len) {
     struct irc_prefix prefix = {
         .nick = ircd->nick,
         //.user = ircd->username,
@@ -343,9 +346,28 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
     } else if (strncmp(lineptr, "MODE ", 5) == 0) {
         return;
 
+    } else if (strncmp(lineptr, "WHO ", 4) == 0) {
+        const char *channel_name = lineptr + 4;
+        if (len < 6) {
+            ircd_send(ircd, session, &ircd->prefix, "461 %s WHO :Not enough parameters", ircd->nick);
+            return;
+        }
+        // :host 352 mynick #chan ~usern remotehost ircserver nick H :0 fullname
+        struct irc_channel *chan = ircd_get_channel(ircd, channel_name);
+        struct irc_user *user;
+        for (user = chan->user_list; user; user = user->next) {
+            ircd_send(ircd, session, &ircd->prefix, "352 %s %s ~%s %s %s %s %c :%u %s",
+                    //ircd->nick, channel_name, user->username, user->host,
+                    ircd->nick, channel_name, user->nick, user->host,
+                    user->host, user->nick, 'H', user->is_me ? 0 : 1, user->nick);
+        }
+        ircd_send(ircd, session, &ircd->prefix, "315 %s %s :End of /WHO list.", ircd->nick, channel_name);
+
     } else if (strncmp(lineptr, "WHOIS ", 6) == 0) {
-        // TODO
-        return;
+        const char *target = lineptr + 6;
+        // :host 401 nick target :No such nick/channel
+        ircd_send(ircd, session, &ircd->prefix, "318 %s %s :End of /WHOIS list.",
+                ircd->nick, target);
 
     } else if (strncmp(lineptr, "QUIT ", 5) == 0) {
         close(session->fd);
@@ -418,7 +440,7 @@ ircd_handle_buffer(ircd_t *ircd, struct irc_session *session) {
     while ( (line_end = (char*)memchr((void*)line_start, '\r', session->inbuf_used - (line_start - session->inbuf))))
     {
         *line_end = 0;
-        ircd_handle_message(ircd, session, line_start);
+        ircd_handle_message(ircd, session, line_start, line_end - line_start);
         line_start = line_end + 2;
     }
     /* Shift buffer down so the unprocessed data is at the start */
@@ -498,7 +520,7 @@ ircd_get_channel(ircd_t *ircd, const char *chan_name) {
 // add a user to the channel's nick list.
 // return whether they were already there
 bool
-irc_channel_add_nick(struct irc_channel *channel, const char *nick) {
+irc_channel_add_nick(struct irc_channel *channel, const char *nick, const char *ip, bool is_me) {
     struct irc_user *user;
     for (user = channel->user_list; user; user = user->next) {
         if (strcmp(nick, user->nick) == 0) {
@@ -512,6 +534,8 @@ irc_channel_add_nick(struct irc_channel *channel, const char *nick) {
         perror("calloc");
     }
     strncpy(user->nick, nick, sizeof(user->nick));
+    strncpy(user->host, ip, sizeof(user->host));
+    user->is_me = is_me;
     user->next = channel->user_list;
     channel->user_list = user;
     return false;
@@ -541,8 +565,9 @@ void
 ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
     struct irc_channel *chan = ircd_get_channel(ircd, channel);
     if (!chan) return;
-    if (irc_channel_add_nick(chan, prefix->nick)) {
-        // they were already in the channel
+    bool is_me = (prefix->nick == ircd->nick) && (prefix->host == ircd->prefix.host);
+    if (irc_channel_add_nick(chan, prefix->nick, prefix->host, is_me)) {
+        // were already in the channel
         return;
     }
     if (!chan->in) {
