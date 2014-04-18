@@ -305,10 +305,12 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
             //printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
 
             // note their nick
+            ;
+            size_t nick_len = strlen(msg) + 1;
+            if (!nick_len) break;
             if (peer->nick) {
                 free(peer->nick);
             }
-            size_t nick_len = strlen(msg);
             peer->nick = strndup(msg, nick_len);
             prefix.nick = peer->nick;
             if (!peer->nick) {
@@ -318,8 +320,8 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
 
             // add that they are in the given channels
             for (channel = msg + nick_len;
-                    channel - msg < len;
-                    channel += strlen(channel)) {
+                    channel - msg < len && channel[0];
+                    channel += strlen(channel) + 1) {
                 ircd_join(mc->ircd, &prefix, channel);
             }
 

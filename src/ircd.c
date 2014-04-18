@@ -59,9 +59,11 @@ struct ircd {
 
 void ircd_free_session(ircd_t *ircd, struct irc_session *session);
 struct irc_channel *ircd_get_channel(ircd_t *ircd, const char *channel);
-void irc_channel_add_nick(struct irc_channel *channel, const char *nick);
+bool irc_channel_add_nick(struct irc_channel *channel, const char *nick);
 void irc_session_welcome(ircd_t *ircd, struct irc_session *session);
 void irc_session_join(ircd_t *ircd, struct irc_session *session,
+        struct irc_prefix *prefix, struct irc_channel *channel);
+void irc_session_names(ircd_t *ircd, struct irc_session *session,
         struct irc_prefix *prefix, struct irc_channel *channel);
 
 inline void
@@ -239,6 +241,7 @@ irc_session_welcome(ircd_t *ircd, struct irc_session *session) {
     for (chan = ircd->channel_list; chan; chan = chan->next) {
         if (chan->in) {
             irc_session_join(ircd, session, &prefix, chan);
+            irc_session_names(ircd, session, &prefix, chan);
         }
     }
 }
@@ -276,16 +279,18 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *channel = lineptr + 5;
         // allow meshchat to broadcast join message
         callback_call(ircd->callbacks.on_join, channel, ircd->nick);
-        // mark that we are in this channel
         struct irc_channel *chan = ircd_get_channel(ircd, channel);
         if (!chan) {
             fprintf(stderr, "Unable to get channel\n");
         } else {
             chan->in = true;
-            irc_channel_add_nick(chan, ircd->nick);
         }
         // tell clients to join
         ircd_join(ircd, &prefix, channel);
+        // give clients names
+        for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+            irc_session_names(ircd, session, &prefix, chan);
+        }
 
     } else if (strncmp(lineptr, "PART ", 5) == 0) {
         char *channel = lineptr + 5;
@@ -490,13 +495,15 @@ ircd_get_channel(ircd_t *ircd, const char *chan_name) {
     return chan;
 }
 
-void
+// add a user to the channel's nick list.
+// return whether they were already there
+bool
 irc_channel_add_nick(struct irc_channel *channel, const char *nick) {
     struct irc_user *user;
     for (user = channel->user_list; user; user = user->next) {
         if (strcmp(nick, user->nick) == 0) {
             // nick already in list
-            return;
+            return true;
         }
     }
     // add nick to list
@@ -504,11 +511,10 @@ irc_channel_add_nick(struct irc_channel *channel, const char *nick) {
     if (!user) {
         perror("calloc");
     }
-    printf("nick: %s, old_nick: %s\n", nick, user->nick);
     strncpy(user->nick, nick, sizeof(user->nick));
     user->next = channel->user_list;
     channel->user_list = user;
-    return;
+    return false;
 }
 
 // get names of channels we are in
@@ -535,7 +541,10 @@ void
 ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
     struct irc_channel *chan = ircd_get_channel(ircd, channel);
     if (!chan) return;
-    irc_channel_add_nick(chan, prefix->nick);
+    if (irc_channel_add_nick(chan, prefix->nick)) {
+        // they were already in the channel
+        return;
+    }
     if (!chan->in) {
         // we are not in this channel
         return;
@@ -618,5 +627,4 @@ void
 irc_session_join(ircd_t *ircd, struct irc_session *session, struct irc_prefix
         *prefix, struct irc_channel *channel) {
     ircd_send(ircd, session, prefix, "JOIN :%s", channel->name);
-    irc_session_names(ircd, session, prefix, channel);
 }
