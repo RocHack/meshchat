@@ -2,7 +2,7 @@ BIN = meshchat
 SRC = $(wildcard src/*.c)
 SRC += $(wildcard deps/*/*.c)
 OBJ = $(SRC:.c=.o)
-CFLAGS = -Ideps -Wall -g
+CFLAGS = -Ideps -Wall -pedantic
 CFLAGS += -std=gnu99
 LDFLAGS =
 
