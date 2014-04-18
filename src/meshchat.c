@@ -42,6 +42,7 @@ struct meshchat {
     time_t last_peerservice;
     hash_t *peers;
     char nick[MESHCHAT_NAME_LEN]; // our node's nick
+    struct peer *me;
 };
 
 struct peer {
@@ -76,8 +77,8 @@ const char *event_names[] = {
     "nick"
 };
 
-void handle_datagram(meshchat_t *mc, struct sockaddr *addr, const char *buffer,
-        ssize_t len);
+void handle_datagram(meshchat_t *mc, struct sockaddr *addr, char *buffer,
+        size_t len);
 peer_t *get_peer(meshchat_t *mc, const char *ip);
 void found_ip(void *obj, const char *ip);
 void service_peers(meshchat_t *mc);
@@ -193,6 +194,8 @@ meshchat_start(meshchat_t *mc) {
     //strcpy(mc->addrport, sprint_addrport(addr));
     if (!inet_ntop(AF_INET6, &addr6->sin6_addr, mc->ip, INET6_ADDRSTRLEN)) {
         perror("inet_ntop");
+    } else {
+        mc->me = get_peer(mc, mc->ip);
     }
 
     if (bind(fd, addr, sizeof(*addr6)) < 0) {
@@ -259,9 +262,7 @@ meshchat_process_select_descriptors(meshchat_t *mc, fd_set *in_set,
 }
 
 void
-handle_datagram(meshchat_t *mc, struct sockaddr *in, const char *msg, ssize_t len) {
-    //printf("%s sent (%u, %zd): \"%*s\"\n", sprint_addrport(in),
-            //msg[0], len, (int)len-1, msg+1);
+handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
     peer_t *peer;
 
     if (!hash_size(mc->peers)) {
@@ -368,11 +369,6 @@ get_peer(meshchat_t *mc, const char *ip) {
         fprintf(stderr, "Failed to canonicalize ip %s\n", ip);
     }
 
-    // don't connect to ourself
-    if (!strcmp(ip, mc->ip)) {
-        return NULL;
-    }
-
     //printf("ip: %s, peers: %u\n", ip_copy, hash_size(mc->peers));
     if (hash_size(mc->peers)) {
         peer = hash_get(mc->peers, (char *)ip_copy);
@@ -427,6 +423,9 @@ peer_send(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
 
 static inline void
 service_peer(meshchat_t *mc, time_t now, peer_t *peer) {
+    if (peer == mc->me) {
+        return;
+    }
     switch (peer->status) {
         // greet new unknown peer
         case PEER_UNKNOWN:

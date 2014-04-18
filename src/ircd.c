@@ -55,6 +55,8 @@ struct ircd {
 
 static const struct irc_prefix localhost = {.host = "localhost"};
 
+void ircd_free_session(ircd_t *ircd, struct irc_session *session);
+
 inline void
 callback_call(callback_t cb, char *channel, char *data) {
     if (cb.obj) {
@@ -286,6 +288,11 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
     } else if (strncmp(lineptr, "WHOIS ", 6) == 0) {
         // TODO
         return;
+
+    } else if (strncmp(lineptr, "QUIT ", 5) == 0) {
+        close(session->fd);
+        session->fd = -1;
+        //ircd_free_session(ircd, session);
 
     } else {
         printf("Unhandled message: %s\n", lineptr);
