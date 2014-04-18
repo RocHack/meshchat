@@ -424,47 +424,44 @@ greet_peer(meshchat_t *mc, peer_t *peer) {
 }
 
 void
-broadcast_event(meshchat_t *mc, enum event_type ev, char *data) {
+broadcast_event(meshchat_t *mc, enum event_type ev, int argv, ...) {
     static char msg[MESHCHAT_PACKETLEN];
-    size_t len = strlen(data)+1;
-    if (len > MESHCHAT_PACKETLEN) len = MESHCHAT_PACKETLEN;
+    int i, offset = 1;
     msg[0] = ev;
-    strncpy(msg+1, data, len);
-    broadcast_all(mc, msg, 1+len);
-}
+    va_list ap;
+    char *arg;
 
-void
-broadcast_event2(meshchat_t *mc, enum event_type ev, char *channel, char *data) {
-    static char msg[MESHCHAT_PACKETLEN];
-    size_t channel_len = strlen(channel);
-    size_t data_len = strlen(data);
-    msg[0] = ev;
-    if (channel_len > MESHCHAT_CHANNEL_LEN) channel_len = MESHCHAT_CHANNEL_LEN;
-    if (data_len > MESHCHAT_MESSAGE_LEN) data_len = MESHCHAT_MESSAGE_LEN;
-
-    strncpy(msg + 1, channel, channel_len);
-    msg[1 + channel_len] = '\0';
-    strncpy(msg + 2 + channel_len, data, data_len);
-    msg[2 + channel_len + data_len] = '\0';
-    broadcast_channel(mc, channel, msg, 3 + channel_len + data_len);
+    va_start(ap, argv);
+    for (i = 0; i < argv; i++) {
+        arg = va_arg(ap, char *);
+        size_t len = strlen(arg)+1;
+        if (len + offset > MESHCHAT_PACKETLEN) {
+            fprintf(stderr, "truncated message\n");
+            break;
+        }
+        strncpy(msg + offset, arg, len);
+        offset += len;
+    }
+    va_end(ap);
+    broadcast_all(mc, msg, offset);
 }
 
 void
 on_irc_msg(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
-    broadcast_event2(mc, EVENT_MSG, channel, data);
+    broadcast_event(mc, EVENT_MSG, 2, channel, data);
 }
 
 void
 on_irc_action(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
-    broadcast_event2(mc, EVENT_ACTION, channel, data);
+    broadcast_event(mc, EVENT_ACTION, 2, channel, data);
 }
 
 void
 on_irc_notice(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
-    broadcast_event2(mc, EVENT_NOTICE, channel, data);
+    broadcast_event(mc, EVENT_NOTICE, 2, channel, data);
 }
 
 void
@@ -481,19 +478,20 @@ on_irc_privmsg(void *obj, char *recipient, char *data) {
 }
 
 void
-on_irc_join(void *obj, char *channel, char *data) {
+on_irc_join(void *obj, char *channel, char *nick) {
     meshchat_t *mc = (meshchat_t *)obj;
-    broadcast_event(mc, EVENT_JOIN, channel);
+    broadcast_event(mc, EVENT_JOIN, 2, channel, nick);
 }
 
 void
 on_irc_part(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
-    broadcast_event2(mc, EVENT_PART, channel, data);
+    broadcast_event(mc, EVENT_PART, 2, channel, data);
 }
 
 void
 on_irc_nick(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
-    broadcast_event(mc, EVENT_NICK, data);
+    broadcast_event(mc, EVENT_NICK, 1, data);
+    strcpy(mc->nick, data);
 }
