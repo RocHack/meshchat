@@ -592,6 +592,10 @@ irc_session_names(ircd_t *ircd, struct irc_session *session, struct irc_prefix
     static const char channel_type = '='; // public channel
     size_t len = snprintf(msg, sizeof(msg), "353 %s %c %s :",
             ircd->nick, channel_type, channel->name);
+    if (len > sizeof(msg)) {
+        fprintf(stderr, "Unable to write channel names\n");
+        return;
+    }
     // add nicks to the list
     for (struct irc_user *user = channel->user_list; user; user = user->next) {
         size_t nick_len = strlen(user->nick);
@@ -603,7 +607,9 @@ irc_session_names(ircd_t *ircd, struct irc_session *session, struct irc_prefix
         len += nick_len;
         msg[len++] = ' ';
     }
-    printf("sending names: %s\n", msg);
+    if (len > 0) {
+        msg[len-1] = '\0';
+    }
     ircd_send(ircd, session, prefix, "%s", msg);
     ircd_send(ircd, session, prefix, "366 %s %s :End of /NAMES list.", ircd->nick, channel->name);
 }
