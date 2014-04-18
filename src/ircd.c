@@ -22,6 +22,7 @@ struct irc_session {
     int fd;
     char inbuf[IRCD_BUFFER_LEN];
     size_t inbuf_used;
+    char ip[INET6_ADDRSTRLEN];
     // link
     struct irc_session *next;
 };
@@ -51,6 +52,8 @@ struct ircd {
     struct irc_channel *channel_list;
     ircd_callbacks_t callbacks;
 };
+
+static const struct irc_prefix localhost = {.host = "localhost"};
 
 inline void
 callback_call(callback_t cb, char *channel, char *data) {
@@ -209,10 +212,20 @@ void
 ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *lineptr) {
     if (strncmp(lineptr, "NICK ", 5) == 0) {
-        // NICK username
+        char oldnick[MESHCHAT_NAME_LEN];
+        struct irc_prefix prefix = {
+            .nick = oldnick,
+            .user = ircd->username,
+            .host = session->ip
+        };
+        strncpy(oldnick, ircd->nick, MESHCHAT_NAME_LEN);
         strwncpy(ircd->nick, lineptr + 5, MESHCHAT_NAME_LEN);
         callback_call(ircd->callbacks.on_nick, NULL, ircd->nick);
-        //printf("NICK %s\n", ircd->nick);
+        if (oldnick[0]) {
+            // acknowledge nick change
+            ircd_send(ircd, session, &prefix, "NICK :%s", ircd->nick);
+        }
+
     } else if (strncmp(lineptr, "USER ", 5) == 0) {
         // NICK username
         strwncpy(ircd->username, lineptr + 5, MESHCHAT_FULLNAME_LEN);
@@ -220,15 +233,11 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         ircd_send(ircd, session, NULL, "002 %s :IRC MeshChat v1", ircd->username);
         ircd_send(ircd, session, NULL, "003 %s :Created 0", ircd->username);
         ircd_send(ircd, session, NULL, "004 %s localhost ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->username);
-        //printf("NICK %s\n", ircd->nick);
+
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
-        // NICK username
         callback_call(ircd->callbacks.on_join, lineptr + 5, ircd->nick);
-        //printf("CLIENT WANTS TO JOIN %s\n", lineptr + 5);
-        //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
-        //printf("NICK %s\n", ircd->nick);
+
     } else if (strncmp(lineptr, "PRIVMSG ", 8) == 0) {
-        // NICK username
         char channel[MESHCHAT_CHANNEL_LEN];
         char message[MESHCHAT_MESSAGE_LEN];
         int clen = strwncpy(channel, lineptr + 8, MESHCHAT_CHANNEL_LEN);
@@ -247,11 +256,9 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
                 printf("message: (%zu) \"%s\"\n", strlen(message+1), message+1);
             }
         } else {
-            printf("CLIENT in %s: %s\n", channel, message);
             callback_call(ircd->callbacks.on_msg, channel, message);
         }
-        //strwncpy(ircd->nick, lineptr + 5, MESHCHAT_CHANNEL_LEN);
-        //printf("NICK %s\n", ircd->nick);
+
     } else if (strncmp(lineptr, "NOTICE ", 7) == 0) {
         // check for CTCP message (surrounded with 0x01)
         if (lineptr[7] == 0x01) {
@@ -269,8 +276,19 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
             printf("notice in %s: \"%s\"\n", channel, message);
             callback_call(ircd->callbacks.on_notice, channel, message);
         }
+
     } else if (strncmp(lineptr, "PING ", 5) == 0) {
         ircd_send(ircd, session, NULL, "PONG localhost", ircd->username);
+
+    } else if (strncmp(lineptr, "MODE ", 5) == 0) {
+        return;
+
+    } else if (strncmp(lineptr, "WHOIS ", 6) == 0) {
+        // TODO
+        return;
+
+    } else {
+        printf("Unhandled message: %s\n", lineptr);
     }
 }
 
@@ -361,6 +379,9 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
             new_session->fd = new_fd;
             new_session->inbuf_used = 0;
             new_session->next = ircd->session_list;
+            if (!inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&addr)->sin6_addr, new_session->ip, INET6_ADDRSTRLEN)) {
+                perror("inet_ntop");
+            }
             ircd->session_list = new_session;
         }
     }
@@ -389,6 +410,7 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
 
 void
 ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
+    // send to all sessions
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "JOIN :%s", channel);
     }
@@ -399,5 +421,12 @@ ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
         const char *msg) {
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "PRIVMSG %s :%s", target, msg);
+    }
+}
+
+void
+ircd_nick(ircd_t *ircd, struct irc_prefix *prefix, const char *nick) {
+    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+        ircd_send(ircd, sess, prefix, "NICK :%s", nick);
     }
 }

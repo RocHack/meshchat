@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -14,6 +15,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
 #include <time.h>
 #include "ircd.h"
 #include "hash/hash.h"
@@ -32,12 +34,14 @@
 struct meshchat {
     ircd_t *ircd;
     cjdnsadmin_t *cjdnsadmin;
-    const char *host;
+    //const char *host;
     int port;
     int listener;
+    char ip[INET6_ADDRSTRLEN];
     time_t last_peerfetch;
     time_t last_peerservice;
     hash_t *peers;
+    char nick[MESHCHAT_NAME_LEN]; // our node's nick
 };
 
 struct peer {
@@ -46,6 +50,7 @@ struct peer {
     enum peer_status status;
     time_t last_message;    // they sent to us
     time_t last_greeted;    // we sent to them
+    char *nick;
 };
 
 enum event_type {
@@ -57,6 +62,18 @@ enum event_type {
     EVENT_JOIN,
     EVENT_PART,
     EVENT_NICK,
+};
+
+const char *event_names[] = {
+    NULL,
+    "greeting",
+    "msg",
+    "privmsg",
+    "action",
+    "notice",
+    "join",
+    "part",
+    "nick"
 };
 
 void handle_datagram(meshchat_t *mc, struct sockaddr *addr, const char *buffer,
@@ -118,7 +135,7 @@ meshchat_t *meshchat_new() {
 
     // todo: allow custom port/hostname
     mc->port = MESHCHAT_PORT;
-    mc->host = "::"; // wildcard
+    //mc->host = "::"; // wildcard
 
     return mc;
 }
@@ -139,10 +156,32 @@ meshchat_start(meshchat_t *mc) {
     // connect to cjdns admin
     cjdnsadmin_start(mc->cjdnsadmin);
 
-    struct sockaddr_in6 addr = {0};
-    addr.sin6_family = AF_INET6;
-    addr.sin6_port = htons(mc->port);
-    inet_pton(AF_INET6, mc->host, &(addr.sin6_addr));
+    struct sockaddr *addr = NULL;
+    struct sockaddr_in6 *addr6 = NULL;
+    struct ifaddrs *ifaddr, *ifa;
+    if (getifaddrs(&ifaddr) < 0) {
+        perror("getifaddrs");
+    }
+
+    // find a cjdns-friendly IPv6 address to bind to
+    // todo: allow configuring to use a specfic address
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        addr = ifa->ifa_addr;
+        if (addr && addr->sa_family == AF_INET6) {
+            addr6 = (struct sockaddr_in6 *)addr;
+            if (addr6->sin6_addr.s6_addr[0] == 0xfc) {
+                break;
+            }
+        }
+    }
+
+    if (!ifa) {
+        fprintf(stderr, "Unable to find a cjdns ip.\n");
+        exit(1);
+    }
+
+    addr6->sin6_port = htons(mc->port);
+    //inet_pton(AF_INET6, mc->host, &addr->sin6_addr);
 
     int fd = socket(AF_INET6, SOCK_DGRAM, 0);
     if (fd==-1) {
@@ -150,11 +189,20 @@ meshchat_start(meshchat_t *mc) {
     }
     mc->listener = fd;
 
-    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        perror("bind");
+    const char *addrport = sprint_addrport(addr);
+    //strcpy(mc->addrport, sprint_addrport(addr));
+    if (!inet_ntop(AF_INET6, &addr6->sin6_addr, mc->ip, INET6_ADDRSTRLEN)) {
+        perror("inet_ntop");
     }
 
-    printf("meshchat bound to %s\n", sprint_addrport((struct sockaddr *)&addr));
+    if (bind(fd, addr, sizeof(*addr6)) < 0) {
+        perror("bind");
+        printf("meshchat failed to bind to %s\n", addrport);
+    } else {
+        printf("meshchat bound to %s\n", addrport);
+    }
+
+    freeifaddrs(ifaddr);
 }
 
 void
@@ -240,24 +288,44 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, const char *msg, ssize_t le
     time_t now = time(0);
     peer->last_message = now;
     // first byte is the event type
-    msg[len--] = '\0';
+    //msg[len--] = '\0';
+    struct irc_prefix prefix = {
+        .nick = peer->nick,
+        .user = NULL,
+        .host = peer->ip
+    };
     switch(*(msg++)) {
         case EVENT_GREETING:
-            printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
+            // nick,channel...
+            //printf("got greeting from %s: \"%s\"\n", sprint_addrport(in), msg);
+
+            // note their nick
+            if (peer->nick) {
+                free(peer->nick);
+            }
+            peer->nick = strdup(msg);
+            if (!peer->nick) {
+                fprintf(stderr, "Unable to update nick\n");
+            }
+            // TODO: add that they are in the given channels
+
             // respond back if they are new to us
             if (peer->status != PEER_ACTIVE ||
                     difftime(now, peer->last_greeted) > MESHCHAT_PING_INTERVAL) {
-                //printf("responding to new\n");
                 greet_peer(mc, peer);
             }
             break;
         case EVENT_MSG:
+            // channel,message
             channel = msg;
             msg += strlen(channel)+1;
-            printf("[%s] <%s> \"%s\"\n", channel, sprint_addrport(in), msg);
+            printf("[%s] <%s@%s> \"%s\"\n", channel, prefix.nick, prefix.host, msg);
+            ircd_privmsg(mc->ircd, &prefix, channel, msg);
             break;
         case EVENT_PRIVMSG:
-            printf("<%s> \"%s\"\n", sprint_addrport(in), msg);
+            // message
+            printf("<%s@%s> \"%s\"\n", prefix.nick, prefix.host, msg);
+            ircd_privmsg(mc->ircd, &prefix, prefix.nick, msg);
             break;
         case EVENT_ACTION:
             channel = msg;
@@ -270,16 +338,20 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, const char *msg, ssize_t le
             printf("[%s] <%s> ! \"%s\"\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_JOIN:
+            // channel
             channel = msg;
-            msg += strlen(channel)+1;
             printf("[%s] <%s joined>\n", channel, sprint_addrport(in));
+            ircd_join(mc->ircd, &prefix, channel);
             break;
         case EVENT_PART:
+            // channel
             channel = msg;
             msg += strlen(channel)+1;
             printf("[%s] <%s parted> (%s)\n", channel, sprint_addrport(in), msg);
             break;
         case EVENT_NICK:
+            ircd_nick(mc->ircd, &prefix, msg);
+            peer->nick = strdup(msg);
             printf("%s nick: %s\n", sprint_addrport(in), msg);
             break;
     };
@@ -294,6 +366,11 @@ get_peer(meshchat_t *mc, const char *ip) {
     // canonicalize the ipv6 string
     if (!canonicalize_ipv6(ip_copy, ip)) {
         fprintf(stderr, "Failed to canonicalize ip %s\n", ip);
+    }
+
+    // don't connect to ourself
+    if (!strcmp(ip, mc->ip)) {
+        return NULL;
     }
 
     //printf("ip: %s, peers: %u\n", ip_copy, hash_size(mc->peers));
@@ -344,13 +421,12 @@ peer_send(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
                 sizeof(peer->addr)) < 0) {
         perror("sendto");
     }
-    //printf("sent \"%*s\" to %s\n", (int)len-1, msg,
+    //printf("sent \"%*s\" (%zu) to %s\n", (int)len-1, msg, len,
         //sprint_addrport((struct sockaddr *)&peer->addr));
 }
 
 static inline void
 service_peer(meshchat_t *mc, time_t now, peer_t *peer) {
-    //peer_print(peer);
     switch (peer->status) {
         // greet new unknown peer
         case PEER_UNKNOWN:
@@ -384,7 +460,7 @@ broadcast_all_peer(meshchat_t *mc, peer_t *peer, char *msg, size_t len) {
     // send only to active peer
     if (peer->status == PEER_ACTIVE) {
         peer_send(mc, peer, msg, len);
-        printf("sending (%x) %s to %s\n", msg[0], msg+1, peer->ip);
+        printf("sending (%s) %s to %s\n", event_names[(int)msg[0]], msg+1, peer->ip);
     }
 }
 
@@ -414,10 +490,10 @@ void
 greet_peer(meshchat_t *mc, peer_t *peer) {
     static char msg[MESHCHAT_PACKETLEN];
     //printf("greeting peer %s\n", peer->ip);
-    const char *rooms = "#rochack";
-    // todo: get rooms
+    //const char *rooms = "#rochack";
+    // TODO: list rooms here
     msg[0] = EVENT_GREETING;
-    strncpy(msg+1, rooms, sizeof(msg)-1);
+    strncpy(msg+1, mc->nick, sizeof(mc->nick));
     peer_send(mc, peer, msg, strlen(msg)+1);
     //printf("msg: [%d] %s\n", msg[0], msg+1);
     time(&peer->last_greeted);

@@ -3,7 +3,7 @@ SRC = $(wildcard src/*.c)
 SRC += $(wildcard deps/*/*.c)
 OBJ = $(SRC:.c=.o)
 CFLAGS = -Ideps -Wall -g
-CFLAGS += -std=c99 -D_POSIX_SOURCE
+CFLAGS += -std=gnu99
 LDFLAGS =
 
 all: $(BIN)
