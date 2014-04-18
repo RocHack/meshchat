@@ -342,6 +342,7 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
             channel = msg;
             msg += strlen(channel)+1;
             printf("[%s] <%s> ! \"%s\"\n", channel, sprint_addrport(in), msg);
+            ircd_notice(mc->ircd, &prefix, channel, msg);
             break;
         case EVENT_JOIN:
             // channel

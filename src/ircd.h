@@ -60,6 +60,9 @@ void ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
 void ircd_action(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
         const char *msg);
 
+void ircd_notice(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
+        const char *msg);
+
 void ircd_nick(ircd_t *ircd, struct irc_prefix *prefix, const char *nick);
 
 #endif /* IRCD_H */

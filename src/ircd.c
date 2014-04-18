@@ -465,6 +465,14 @@ ircd_action(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
 }
 
 void
+ircd_notice(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
+        const char *msg) {
+    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+        ircd_send(ircd, sess, prefix, "NOTICE %s :%s", target, msg);
+    }
+}
+
+void
 ircd_nick(ircd_t *ircd, struct irc_prefix *prefix, const char *nick) {
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "NICK :%s", nick);
