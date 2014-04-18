@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -28,7 +29,7 @@ struct irc_session {
 };
 
 struct irc_user {
-    char name[MESHCHAT_NAME_LEN]; // 9
+    char nick[MESHCHAT_NAME_LEN]; // 9
     char username[MESHCHAT_FULLNAME_LEN]; // 32
     char realname[MESHCHAT_FULLNAME_LEN]; // 32
     char host[MESHCHAT_HOST_LEN]; // 63
@@ -39,6 +40,8 @@ struct irc_channel {
     char name[MESHCHAT_CHANNEL_LEN]; // 50
     char topic[MESHCHAT_MESSAGE_LEN]; // 512
     struct irc_user *user_list;
+    struct irc_channel *next;
+    bool in; // is our client in this channel
 };
 
 struct ircd {
@@ -55,6 +58,11 @@ struct ircd {
 };
 
 void ircd_free_session(ircd_t *ircd, struct irc_session *session);
+struct irc_channel *ircd_get_channel(ircd_t *ircd, const char *channel);
+void irc_channel_add_nick(struct irc_channel *channel, const char *nick);
+void irc_session_welcome(ircd_t *ircd, struct irc_session *session);
+void irc_session_join(ircd_t *ircd, struct irc_session *session,
+        struct irc_prefix *prefix, struct irc_channel *channel);
 
 inline void
 callback_call(callback_t cb, char *channel, char *data) {
@@ -215,6 +223,27 @@ ircd_send(ircd_t *ircd, struct irc_session *session, struct irc_prefix *prefix,
 }
 
 void
+irc_session_welcome(ircd_t *ircd, struct irc_session *session) {
+    ircd_send(ircd, session, NULL, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->nick);
+    ircd_send(ircd, session, NULL, "002 %s :IRC MeshChat v1", ircd->nick);
+    ircd_send(ircd, session, NULL, "003 %s :Created 0", ircd->nick);
+    ircd_send(ircd, session, NULL, "004 %s %s ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->nick, ircd->host);
+
+    struct irc_prefix prefix = {
+        .nick = ircd->nick,
+        .host = ircd->host
+    };
+
+    // send joins for the rooms we are in
+    struct irc_channel *chan;
+    for (chan = ircd->channel_list; chan; chan = chan->next) {
+        if (chan->in) {
+            irc_session_join(ircd, session, &prefix, chan);
+        }
+    }
+}
+
+void
 ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *lineptr) {
     struct irc_prefix prefix = {
@@ -233,20 +262,30 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         if (oldnick[0]) {
             // acknowledge nick change
             ircd_nick(ircd, &prefix, ircd->nick);
+        } else if (ircd->username[0]) {
+            irc_session_welcome(ircd, session);
         }
 
     } else if (strncmp(lineptr, "USER ", 5) == 0) {
-        // NICK username
         strwncpy(ircd->username, lineptr + 5, MESHCHAT_FULLNAME_LEN);
-        ircd_send(ircd, session, NULL, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->nick);
-        ircd_send(ircd, session, NULL, "002 %s :IRC MeshChat v1", ircd->nick);
-        ircd_send(ircd, session, NULL, "003 %s :Created 0", ircd->nick);
-        ircd_send(ircd, session, NULL, "004 %s %s ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->nick, ircd->host);
+        if (ircd->username[0] && ircd->nick[0]) {
+            irc_session_welcome(ircd, session);
+        }
 
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
         char *channel = lineptr + 5;
+        // allow meshchat to broadcast join message
         callback_call(ircd->callbacks.on_join, channel, ircd->nick);
+        // tell clients to join
         ircd_join(ircd, &prefix, channel);
+        // mark that we are in this channel
+        struct irc_channel *chan = ircd_get_channel(ircd, channel);
+        if (!chan) {
+            fprintf(stderr, "Unable to get channel\n");
+        } else {
+            chan->in = true;
+            irc_channel_add_nick(chan, ircd->nick);
+        }
 
     } else if (strncmp(lineptr, "PART ", 5) == 0) {
         char *channel = lineptr + 5;
@@ -433,11 +472,76 @@ ircd_process_select_descriptors(ircd_t *ircd, fd_set *in_set,
     }
 }
 
+struct irc_channel *
+ircd_get_channel(ircd_t *ircd, const char *chan_name) {
+    struct irc_channel *chan;
+    for (chan = ircd->channel_list; chan; chan = chan->next) {
+        if (strcmp(chan_name, chan->name) == 0) {
+            // found existing channel
+            return chan;
+        }
+    }
+    // add new channel
+    chan = (struct irc_channel *)calloc(1, sizeof(*chan));
+    if (!chan) return NULL;
+    strncpy(chan->name, chan_name, sizeof(chan->name));
+    chan->next = ircd->channel_list;
+    ircd->channel_list = chan;
+    return chan;
+}
+
+void
+irc_channel_add_nick(struct irc_channel *channel, const char *nick) {
+    struct irc_user *user;
+    for (user = channel->user_list; user; user = user->next) {
+        if (strcmp(nick, user->nick) == 0) {
+            // nick already in list
+            return;
+        }
+    }
+    // add nick to list
+    user = (struct irc_user *)calloc(1, sizeof(*user));
+    if (!user) {
+        perror("calloc");
+    }
+    printf("nick: %s, old_nick: %s\n", nick, user->nick);
+    strncpy(user->nick, nick, sizeof(user->nick));
+    user->next = channel->user_list;
+    channel->user_list = user;
+    return;
+}
+
+// get names of channels we are in
+// write them to a buffer up to a given length, null-separated
+// return the number of bytes written
+size_t
+ircd_get_channels(ircd_t *ircd, char *buffer, size_t buf_len) {
+    int offset = 0;
+    struct irc_channel *chan;
+    for (chan = ircd->channel_list; chan; chan = chan->next) {
+        if (chan->in) {
+            size_t len = strlen(chan->name);
+            if (offset + len < buf_len) {
+                strncpy(buffer + offset, chan->name, len);
+                offset += len;
+                buffer[offset++] = '\0';
+            }
+        }
+    }
+    return offset;
+}
+
 void
 ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
+    struct irc_channel *chan = ircd_get_channel(ircd, channel);
+    irc_channel_add_nick(chan, prefix->nick);
+    if (!chan->in) {
+        // we are not in this channel
+        return;
+    }
     // send to all sessions
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
-        ircd_send(ircd, sess, prefix, "JOIN :%s", channel);
+        irc_session_join(ircd, sess, prefix, chan);
     }
 }
 
@@ -477,4 +581,35 @@ ircd_nick(ircd_t *ircd, struct irc_prefix *prefix, const char *nick) {
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "NICK :%s", nick);
     }
+}
+
+// give a client a name list reply
+void
+irc_session_names(ircd_t *ircd, struct irc_session *session, struct irc_prefix
+        *prefix, struct irc_channel *channel) {
+    char msg[MESHCHAT_MESSAGE_LEN];
+    static const char channel_type = '='; // public channel
+    size_t len = snprintf(msg, sizeof(msg), "353 %s %c %s :",
+            ircd->nick, channel_type, channel->name);
+    // add nicks to the list
+    for (struct irc_user *user = channel->user_list; user; user = user->next) {
+        size_t nick_len = strlen(user->nick);
+        if (len + nick_len + 1 > sizeof(msg)) {
+            // too many names to list them all
+            break;
+        }
+        strncpy(msg + len, user->nick, nick_len);
+        len += nick_len;
+        msg[len++] = ' ';
+    }
+    printf("sending names: %s\n", msg);
+    ircd_send(ircd, session, prefix, "%s", msg);
+    ircd_send(ircd, session, prefix, "366 %s %s :End of /NAMES list.", ircd->nick, channel->name);
+}
+
+void
+irc_session_join(ircd_t *ircd, struct irc_session *session, struct irc_prefix
+        *prefix, struct irc_channel *channel) {
+    ircd_send(ircd, session, prefix, "JOIN :%s", channel->name);
+    irc_session_names(ircd, session, prefix, channel);
 }

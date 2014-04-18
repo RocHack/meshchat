@@ -65,4 +65,6 @@ void ircd_notice(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
 
 void ircd_nick(ircd_t *ircd, struct irc_prefix *prefix, const char *nick);
 
+size_t ircd_get_channels(ircd_t *ircd, char *buffer, size_t buf_len);
+
 #endif /* IRCD_H */

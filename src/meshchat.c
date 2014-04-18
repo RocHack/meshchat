@@ -308,11 +308,20 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
             if (peer->nick) {
                 free(peer->nick);
             }
-            peer->nick = strdup(msg);
+            size_t nick_len = strlen(msg);
+            peer->nick = strndup(msg, nick_len);
+            prefix.nick = peer->nick;
             if (!peer->nick) {
-                fprintf(stderr, "Unable to update nick\n");
+                perror("Unable to update nick. strndup");
+                break;
             }
-            // TODO: add that they are in the given channels
+
+            // add that they are in the given channels
+            for (channel = msg + nick_len;
+                    channel - msg < len;
+                    channel += strlen(channel)) {
+                ircd_join(mc->ircd, &prefix, channel);
+            }
 
             // respond back if they are new to us
             if (peer->status != PEER_ACTIVE ||
@@ -495,13 +504,15 @@ service_peers(meshchat_t *mc) {
 void
 greet_peer(meshchat_t *mc, peer_t *peer) {
     static char msg[MESHCHAT_PACKETLEN];
+    size_t len = 1;
     //printf("greeting peer %s\n", peer->ip);
-    //const char *rooms = "#rochack";
-    // TODO: list rooms here
     msg[0] = EVENT_GREETING;
-    strncpy(msg+1, mc->nick, sizeof(mc->nick));
-    peer_send(mc, peer, msg, strlen(msg)+1);
-    //printf("msg: [%d] %s\n", msg[0], msg+1);
+    // format: nick,channels...
+    size_t nick_len = strlen(mc->nick) + 1;
+    strncpy(msg + 1, mc->nick, nick_len);
+    len += nick_len;
+    len += ircd_get_channels(mc->ircd, msg + len, sizeof(msg) - len);
+    peer_send(mc, peer, msg, len);
     time(&peer->last_greeted);
 }
 
@@ -559,6 +570,7 @@ on_irc_privmsg(void *obj, char *recipient, char *data) {
     */
 }
 
+// client joined a channel
 void
 on_irc_join(void *obj, char *channel, char *nick) {
     meshchat_t *mc = (meshchat_t *)obj;
