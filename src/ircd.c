@@ -276,8 +276,6 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *channel = lineptr + 5;
         // allow meshchat to broadcast join message
         callback_call(ircd->callbacks.on_join, channel, ircd->nick);
-        // tell clients to join
-        ircd_join(ircd, &prefix, channel);
         // mark that we are in this channel
         struct irc_channel *chan = ircd_get_channel(ircd, channel);
         if (!chan) {
@@ -286,6 +284,8 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
             chan->in = true;
             irc_channel_add_nick(chan, ircd->nick);
         }
+        // tell clients to join
+        ircd_join(ircd, &prefix, channel);
 
     } else if (strncmp(lineptr, "PART ", 5) == 0) {
         char *channel = lineptr + 5;
@@ -534,6 +534,7 @@ ircd_get_channels(ircd_t *ircd, char *buffer, size_t buf_len) {
 void
 ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
     struct irc_channel *chan = ircd_get_channel(ircd, channel);
+    if (!chan) return;
     irc_channel_add_nick(chan, prefix->nick);
     if (!chan->in) {
         // we are not in this channel
