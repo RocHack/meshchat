@@ -397,7 +397,9 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
                 ircd->nick, target);
 
     } else if (strncmp(lineptr, "QUIT ", 5) == 0) {
-        ircd_quit(ircd, &prefix, lineptr + 5);
+        char *message = lineptr + 5;
+        if (message[0] == ':') message++;
+        ircd_quit(ircd, &prefix, message);
         close(session->fd);
         session->fd = -1;
         //ircd_free_session(ircd, session);
@@ -546,14 +548,14 @@ ircd_get_channel(ircd_t *ircd, const char *chan_name) {
 }
 
 // add a user to the channel's nick list.
-// return true if we add them, false if they were already them
+// return true if we add them, false if they were already in
 bool
 irc_channel_add_nick(struct irc_channel *channel, const char *nick, const char *ip, bool is_me) {
     struct irc_user *user;
     for (user = channel->user_list; user; user = user->next) {
         if (strcmp(nick, user->nick) == 0) {
             // nick already in list
-            return true;
+            return false;
         }
     }
     // add nick to list
@@ -566,7 +568,7 @@ irc_channel_add_nick(struct irc_channel *channel, const char *nick, const char *
     user->is_me = is_me;
     user->next = channel->user_list;
     channel->user_list = user;
-    return false;
+    return true;
 }
 
 // get names of channels we are in
