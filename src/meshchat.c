@@ -57,7 +57,6 @@ struct peer {
 enum event_type {
     EVENT_GREETING = 1,
     EVENT_MSG,
-    EVENT_PRIVMSG,
     EVENT_NOTICE,
     EVENT_JOIN,
     EVENT_PART,
@@ -68,7 +67,6 @@ const char *event_names[] = {
     NULL,
     "greeting",
     "msg",
-    "privmsg",
     "action",
     "notice",
     "join",
@@ -86,7 +84,6 @@ void peer_send(meshchat_t *mc, peer_t *peer, char *msg, size_t len);
 void greet_peer(meshchat_t *mc, peer_t *peer);
 
 void on_irc_msg(void *obj, char *channel, char *data);
-void on_irc_privmsg(void *obj, char *channel, char *data);
 void on_irc_notice(void *obj, char *channel, char *data);
 void on_irc_nick(void *obj, char *channel, char *data);
 void on_irc_join(void *obj, char *channel, char *data);
@@ -118,7 +115,6 @@ meshchat_t *meshchat_new() {
 
     ircd_callbacks_t callbacks = {
         .on_msg     = {mc, on_irc_msg},
-        .on_privmsg = {mc, on_irc_privmsg},
         .on_part    = {mc, on_irc_part},
         .on_join    = {mc, on_irc_join},
         .on_nick    = {mc, on_irc_nick},
@@ -335,11 +331,6 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
             printf("[%s] <%s@%s> \"%s\"\n", channel, prefix.nick, prefix.host, msg);
             ircd_privmsg(mc->ircd, &prefix, channel, msg);
             break;
-        case EVENT_PRIVMSG:
-            // message
-            printf("<%s@%s> \"%s\"\n", prefix.nick, prefix.host, msg);
-            ircd_privmsg(mc->ircd, &prefix, prefix.nick, msg);
-            break;
         case EVENT_NOTICE:
             channel = msg;
             msg += strlen(channel)+1;
@@ -553,19 +544,6 @@ void
 on_irc_notice(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
     broadcast_event(mc, EVENT_NOTICE, 2, channel, data);
-}
-
-void
-on_irc_privmsg(void *obj, char *recipient, char *data) {
-    /*
-    meshchat_t *mc = (meshchat_t *)obj;
-    static char msg[MESHCHAT_PACKETLEN];
-    msg[0] = EVENT_PRIVMSG;
-    strncpy(msg+1, data, sizeof(msg)-1);
-    // todo: look up peer
-    //peer = 
-    //peer_send(mc, peer, msg);
-    */
 }
 
 // client joined a channel

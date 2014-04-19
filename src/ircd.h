@@ -26,7 +26,6 @@ typedef struct {
 
 typedef struct {
     callback_t on_msg;
-    callback_t on_privmsg;
     callback_t on_notice;
     callback_t on_join;
     callback_t on_part;
