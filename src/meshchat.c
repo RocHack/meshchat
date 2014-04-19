@@ -460,14 +460,16 @@ service_peer(meshchat_t *mc, time_t now, peer_t *peer) {
             }
             if (difftime(now, peer->last_message) > MESHCHAT_TIMEOUT) {
                 // mark unreponsive peer as timed out
+                if (peer->status == PEER_ACTIVE) {
+                    // tell irc that they are gone
+                    struct irc_prefix prefix = {
+                        .nick = peer->nick,
+                        .user = NULL,
+                        .host = peer->ip
+                    };
+                    ircd_quit(mc->ircd, &prefix, "Timed out");
+                }
                 peer->status = PEER_INACTIVE;
-                // tell irc that they are gone
-                struct irc_prefix prefix = {
-                    .nick = peer->nick,
-                    .user = NULL,
-                    .host = peer->ip
-                };
-                ircd_quit(mc->ircd, &prefix, "Timed out");
             }
             break;
         case PEER_INACTIVE:
