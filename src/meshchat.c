@@ -58,7 +58,6 @@ enum event_type {
     EVENT_GREETING = 1,
     EVENT_MSG,
     EVENT_PRIVMSG,
-    EVENT_ACTION,
     EVENT_NOTICE,
     EVENT_JOIN,
     EVENT_PART,
@@ -88,7 +87,6 @@ void greet_peer(meshchat_t *mc, peer_t *peer);
 
 void on_irc_msg(void *obj, char *channel, char *data);
 void on_irc_privmsg(void *obj, char *channel, char *data);
-void on_irc_action(void *obj, char *channel, char *data);
 void on_irc_notice(void *obj, char *channel, char *data);
 void on_irc_nick(void *obj, char *channel, char *data);
 void on_irc_join(void *obj, char *channel, char *data);
@@ -124,7 +122,6 @@ meshchat_t *meshchat_new() {
         .on_part    = {mc, on_irc_part},
         .on_join    = {mc, on_irc_join},
         .on_nick    = {mc, on_irc_nick},
-        .on_action  = {mc, on_irc_action},
         .on_notice  = {mc, on_irc_notice},
     };
 
@@ -343,12 +340,6 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
             printf("<%s@%s> \"%s\"\n", prefix.nick, prefix.host, msg);
             ircd_privmsg(mc->ircd, &prefix, prefix.nick, msg);
             break;
-        case EVENT_ACTION:
-            channel = msg;
-            msg += strlen(channel)+1;
-            printf("[%s] * %s \"%s\"\n", channel, sprint_addrport(in), msg);
-            ircd_action(mc->ircd, &prefix, channel, msg);
-            break;
         case EVENT_NOTICE:
             channel = msg;
             msg += strlen(channel)+1;
@@ -556,12 +547,6 @@ on_irc_msg(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
     broadcast_event(mc, EVENT_MSG, 2, channel, data);
     // TODO: only send the event to peers whom we think are in the channel
-}
-
-void
-on_irc_action(void *obj, char *channel, char *data) {
-    meshchat_t *mc = (meshchat_t *)obj;
-    broadcast_event(mc, EVENT_ACTION, 2, channel, data);
 }
 
 void

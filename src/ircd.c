@@ -325,18 +325,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
             clen++;
         }
         strncpy(message, lineptr + 9 + clen, MESHCHAT_MESSAGE_LEN);
-        // check for CTCP message (surrounded with 0x01)
-        if (message[0] == 0x01) {
-            message[strlen(message)-1] = '\0';
-            if (strncmp(message+1, "ACTION ", 7) == 0) {
-                printf("message: \"%s\"\n", message+8);
-                callback_call(ircd->callbacks.on_action, channel, message+8);
-            } else {
-                printf("message: (%zu) \"%s\"\n", strlen(message+1), message+1);
-            }
-        } else {
-            callback_call(ircd->callbacks.on_msg, channel, message);
-        }
+        callback_call(ircd->callbacks.on_msg, channel, message);
 
     } else if (strncmp(lineptr, "NOTICE ", 7) == 0) {
         // check for CTCP message (surrounded with 0x01)
@@ -702,14 +691,6 @@ ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
     }
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "PRIVMSG %s :%s", target, msg);
-    }
-}
-
-void
-ircd_action(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
-        const char *msg) {
-    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
-        ircd_send(ircd, sess, prefix, "PRIVMSG %s :\1ACTION %s\1", target, msg);
     }
 }
 

@@ -27,7 +27,6 @@ typedef struct {
 typedef struct {
     callback_t on_msg;
     callback_t on_privmsg;
-    callback_t on_action;
     callback_t on_notice;
     callback_t on_join;
     callback_t on_part;
@@ -58,9 +57,6 @@ void ircd_part(ircd_t *ircd, struct irc_prefix *prefix, const char *channel,
 void ircd_quit(ircd_t *ircd, struct irc_prefix *prefix, const char *message);
 
 void ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
-        const char *msg);
-
-void ircd_action(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
         const char *msg);
 
 void ircd_notice(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
