@@ -693,6 +693,13 @@ ircd_quit(ircd_t *ircd, struct irc_prefix *prefix, const char *message) {
 void
 ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
         const char *msg) {
+    if (strchr("#+&!", target[0])) {
+        struct irc_channel *chan = ircd_get_channel(ircd, target);
+        if (!chan || !chan->in) {
+            // we are not in this channel
+            return;
+        }
+    }
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "PRIVMSG %s :%s", target, msg);
     }

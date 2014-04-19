@@ -553,6 +553,7 @@ void
 on_irc_msg(void *obj, char *channel, char *data) {
     meshchat_t *mc = (meshchat_t *)obj;
     broadcast_event(mc, EVENT_MSG, 2, channel, data);
+    // TODO: only send the event to peers whom we think are in the channel
 }
 
 void
