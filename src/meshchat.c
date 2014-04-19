@@ -366,7 +366,7 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
             channel = msg;
             msg += strlen(channel)+1;
             printf("[%s] <%s parted> (%s)\n", channel, sprint_addrport(in), msg);
-            ircd_part(mc->ircd, &prefix, NULL);
+            ircd_part(mc->ircd, &prefix, channel, NULL);
             break;
         case EVENT_NICK:
             ircd_nick(mc->ircd, &prefix, msg);
@@ -467,7 +467,7 @@ service_peer(meshchat_t *mc, time_t now, peer_t *peer) {
                     .user = NULL,
                     .host = peer->ip
                 };
-                ircd_part(mc->ircd, &prefix, "Timed out");
+                ircd_quit(mc->ircd, &prefix, "Timed out");
             }
             break;
         case PEER_INACTIVE:

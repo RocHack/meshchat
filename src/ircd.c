@@ -306,8 +306,12 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
 
     } else if (strncmp(lineptr, "PART ", 5) == 0) {
         char *channel = lineptr + 5;
+        char *message = channel + strlen(channel)+1;
         callback_call(ircd->callbacks.on_part, channel, ircd->nick);
-        ircd_part(ircd, &prefix, channel);
+        if (message - lineptr > len) {
+            return;
+        }
+        ircd_part(ircd, &prefix, channel, message);
 
     } else if (strncmp(lineptr, "PRIVMSG ", 8) == 0) {
         char channel[MESHCHAT_CHANNEL_LEN];
@@ -393,6 +397,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
                 ircd->nick, target);
 
     } else if (strncmp(lineptr, "QUIT ", 5) == 0) {
+        ircd_quit(ircd, &prefix, lineptr + 5);
         close(session->fd);
         session->fd = -1;
         //ircd_free_session(ircd, session);
@@ -634,8 +639,29 @@ ircd_part(ircd_t *ircd, struct irc_prefix *prefix, const char *channel,
         // we are not in this channel
         return;
     }
+    if (!message) {
+        message = "";
+    }
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
-        ircd_send(ircd, sess, prefix, "PART %s", channel);
+        ircd_send(ircd, sess, prefix, "PART %s :%s", channel, message);
+    }
+}
+
+void
+ircd_quit(ircd_t *ircd, struct irc_prefix *prefix, const char *message) {
+    struct irc_channel *chan;
+    for (chan = ircd->channel_list; chan; chan = chan->next) {
+        irc_channel_remove_nick(chan, prefix->nick);
+    }
+    if (!chan->in) {
+        // we are not in this channel
+        return;
+    }
+    if (!message) {
+        message = "";
+    }
+    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+        ircd_send(ircd, sess, prefix, "QUIT :%s", message);
     }
 }
 

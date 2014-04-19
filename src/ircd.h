@@ -55,6 +55,8 @@ void ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel);
 void ircd_part(ircd_t *ircd, struct irc_prefix *prefix, const char *channel,
         const char *message);
 
+void ircd_quit(ircd_t *ircd, struct irc_prefix *prefix, const char *message);
+
 void ircd_privmsg(ircd_t *ircd, struct irc_prefix *prefix, const char *target,
         const char *msg);
 
