@@ -411,6 +411,23 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         // TODO
         return;
 
+    } else if (strncmp(lineptr, "LIST ", 5) == 0) {
+        ircd_send(ircd, session, &ircd->prefix, "321 %s Channel :Users  Name",
+                ircd->nick);
+        struct irc_channel *chan;
+        for (chan = ircd->channel_list; chan; chan = chan->next) {
+            const char *topic = ""; // TODO
+            unsigned int users = 0;
+            struct irc_user *user;
+            for (user = chan->user_list; user; user = user->next) {
+                users++;
+            }
+            ircd_send(ircd, session, &ircd->prefix, "322 %s %s %u :%s",
+                    ircd->nick, chan->name, users, topic);
+        }
+        ircd_send(ircd, session, &ircd->prefix, "323 %s :End of /LIST",
+                ircd->nick);
+
     } else {
         printf("Unhandled message: %s\n", lineptr);
     }
