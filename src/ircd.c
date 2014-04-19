@@ -250,6 +250,13 @@ irc_session_welcome(ircd_t *ircd, struct irc_session *session) {
 }
 
 void
+irc_session_not_enough_args(ircd_t *ircd, struct irc_session *session,
+        const char *command) {
+    ircd_send(ircd, session, &ircd->prefix, "461 %s %s :Not enough parameters",
+            ircd->nick, command);
+}
+
+void
 ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *lineptr, size_t len) {
     struct irc_prefix prefix = {
@@ -349,7 +356,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
     } else if (strncmp(lineptr, "WHO ", 4) == 0) {
         const char *channel_name = lineptr + 4;
         if (len < 6) {
-            ircd_send(ircd, session, &ircd->prefix, "461 %s WHO :Not enough parameters", ircd->nick);
+            irc_session_not_enough_args(ircd, session, "WHO");
             return;
         }
         // :host 352 mynick #chan ~usern remotehost ircserver nick H :0 fullname
@@ -365,7 +372,21 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
 
     } else if (strncmp(lineptr, "WHOIS ", 6) == 0) {
         const char *target = lineptr + 6;
-        // :host 401 nick target :No such nick/channel
+        if (len < 8) {
+            irc_session_not_enough_args(ircd, session, "WHOIS");
+            return;
+        }
+        if (!target) {
+            ircd_send(ircd, session, &ircd->prefix,
+                    "401 %s %s :No such nick/channel", ircd->nick, target);
+        } else {
+            // 311 nick target ~username host * :Real Name
+            // 319 nick target :#chan1 #chan2 #chan3
+            // 312 nick target server :MeshChat
+            // 338 nick target host :actually using host
+            // 317 nick target 78744 1397743067 :seconds idle, signon time
+
+        }
         ircd_send(ircd, session, &ircd->prefix, "318 %s %s :End of /WHOIS list.",
                 ircd->nick, target);
 
