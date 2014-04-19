@@ -592,12 +592,15 @@ ircd_get_channels(ircd_t *ircd, char *buffer, size_t buf_len) {
 bool
 irc_channel_remove_nick(struct irc_channel *channel, const char *nick) {
     struct irc_user *user;
+    if (!channel || !channel->user_list || !nick) {
+        return false;
+    }
     if (channel->user_list && strcmp(channel->user_list->nick, nick) == 0) {
         channel->user_list = channel->user_list->next;
         return true;
     }
     for (user = channel->user_list; user && user->next; user = user->next) {
-        if (strcmp(nick, user->next->nick) == 0) {
+        if (user->next->nick && strcmp(nick, user->next->nick) == 0) {
             user->next = user->next->next;
             free(user->next);
             return true;
@@ -650,18 +653,18 @@ ircd_part(ircd_t *ircd, struct irc_prefix *prefix, const char *channel,
 void
 ircd_quit(ircd_t *ircd, struct irc_prefix *prefix, const char *message) {
     struct irc_channel *chan;
-    for (chan = ircd->channel_list; chan; chan = chan->next) {
-        irc_channel_remove_nick(chan, prefix->nick);
-    }
-    if (!chan->in) {
-        // we are not in this channel
-        return;
-    }
     if (!message) {
         message = "";
     }
-    for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
-        ircd_send(ircd, sess, prefix, "QUIT :%s", message);
+    for (chan = ircd->channel_list; chan; chan = chan->next) {
+        irc_channel_remove_nick(chan, prefix->nick);
+        if (!chan->in) {
+            // we are not in this channel
+            return;
+        }
+        for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+            ircd_send(ircd, sess, prefix, "QUIT :%s", message);
+        }
     }
 }
 
