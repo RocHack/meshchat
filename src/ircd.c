@@ -61,7 +61,9 @@ struct ircd {
 
 void ircd_free_session(ircd_t *ircd, struct irc_session *session);
 struct irc_channel *ircd_get_channel(ircd_t *ircd, const char *channel);
-bool irc_channel_add_nick(struct irc_channel *channel, const char *nick, const char *ip, bool is_me);
+bool irc_channel_add_nick(struct irc_channel *channel, const char *nick,
+        const char *ip, bool is_me);
+bool irc_channel_remove_nick(struct irc_channel *channel, const char *nick);
 void irc_session_welcome(ircd_t *ircd, struct irc_session *session);
 void irc_session_join(ircd_t *ircd, struct irc_session *session,
         struct irc_prefix *prefix, struct irc_channel *channel);
@@ -539,7 +541,7 @@ ircd_get_channel(ircd_t *ircd, const char *chan_name) {
 }
 
 // add a user to the channel's nick list.
-// return whether they were already there
+// return true if we add them, false if they were already them
 bool
 irc_channel_add_nick(struct irc_channel *channel, const char *nick, const char *ip, bool is_me) {
     struct irc_user *user;
@@ -582,12 +584,30 @@ ircd_get_channels(ircd_t *ircd, char *buffer, size_t buf_len) {
     return offset;
 }
 
+bool
+irc_channel_remove_nick(struct irc_channel *channel, const char *nick) {
+    struct irc_user *user;
+    if (channel->user_list && strcmp(channel->user_list->nick, nick) == 0) {
+        channel->user_list = channel->user_list->next;
+        return true;
+    }
+    for (user = channel->user_list; user && user->next; user = user->next) {
+        if (strcmp(nick, user->next->nick) == 0) {
+            user->next = user->next->next;
+            free(user->next);
+            return true;
+        }
+    }
+    // nick wasn't in channel
+    return false;
+}
+
 void
 ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
     struct irc_channel *chan = ircd_get_channel(ircd, channel);
     if (!chan) return;
     bool is_me = (prefix->nick == ircd->nick) && (prefix->host == ircd->prefix.host);
-    if (irc_channel_add_nick(chan, prefix->nick, prefix->host, is_me)) {
+    if (!irc_channel_add_nick(chan, prefix->nick, prefix->host, is_me)) {
         // were already in the channel
         return;
     }
@@ -602,7 +622,18 @@ ircd_join(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
 }
 
 void
-ircd_part(ircd_t *ircd, struct irc_prefix *prefix, const char *channel) {
+ircd_part(ircd_t *ircd, struct irc_prefix *prefix, const char *channel,
+        const char *message) {
+    struct irc_channel *chan = ircd_get_channel(ircd, channel);
+    if (!chan) return;
+    if (!irc_channel_remove_nick(chan, prefix->nick)) {
+        // nick wasn't in the channel
+        return;
+    }
+    if (!chan->in) {
+        // we are not in this channel
+        return;
+    }
     for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
         ircd_send(ircd, sess, prefix, "PART %s", channel);
     }

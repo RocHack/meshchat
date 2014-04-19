@@ -366,6 +366,7 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
             channel = msg;
             msg += strlen(channel)+1;
             printf("[%s] <%s parted> (%s)\n", channel, sprint_addrport(in), msg);
+            ircd_part(mc->ircd, &prefix, NULL);
             break;
         case EVENT_NICK:
             ircd_nick(mc->ircd, &prefix, msg);
@@ -460,6 +461,13 @@ service_peer(meshchat_t *mc, time_t now, peer_t *peer) {
             if (difftime(now, peer->last_message) > MESHCHAT_TIMEOUT) {
                 // mark unreponsive peer as timed out
                 peer->status = PEER_INACTIVE;
+                // tell irc that they are gone
+                struct irc_prefix prefix = {
+                    .nick = peer->nick,
+                    .user = NULL,
+                    .host = peer->ip
+                };
+                ircd_part(mc->ircd, &prefix, "Timed out");
             }
             break;
         case PEER_INACTIVE:
