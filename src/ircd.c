@@ -288,20 +288,23 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         }
 
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
-        char *channel = lineptr + 5;
-        // allow meshchat to broadcast join message
-        callback_call(ircd->callbacks.on_join, channel, ircd->nick);
-        struct irc_channel *chan = ircd_get_channel(ircd, channel);
-        if (!chan) {
-            fprintf(stderr, "Unable to get channel\n");
-        } else {
-            chan->in = true;
-        }
-        // tell clients to join
-        ircd_join(ircd, &prefix, channel);
-        // give clients names
-        for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
-            irc_session_names(ircd, session, &prefix, chan);
+        char *channels = lineptr + 5, *channel;
+        // split by comma
+        for (channel = strtok(channels, ","); channel;
+                channel = strtok(NULL, ",")) {
+            callback_call(ircd->callbacks.on_join, channel, ircd->nick);
+            struct irc_channel *chan = ircd_get_channel(ircd, channel);
+            if (!chan) {
+                fprintf(stderr, "Unable to get channel\n");
+            } else {
+                chan->in = true;
+            }
+            // tell clients to join
+            ircd_join(ircd, &prefix, channel);
+            // give clients names
+            for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+                irc_session_names(ircd, session, &prefix, chan);
+            }
         }
 
     } else if (strncmp(lineptr, "PART ", 5) == 0) {
@@ -309,7 +312,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         char *message = channel + strlen(channel)+1;
         callback_call(ircd->callbacks.on_part, channel, ircd->nick);
         if (message - lineptr > len) {
-            return;
+            message = "";
         }
         ircd_part(ircd, &prefix, channel, message);
 
