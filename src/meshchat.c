@@ -280,7 +280,8 @@ handle_datagram(meshchat_t *mc, struct sockaddr *in, char *msg, size_t len) {
 
     const char *channel;
     if (peer->status != PEER_ACTIVE) {
-        printf("Peer woke up: %s\n", peer->ip);
+        //printf("Peer woke up: %s\n", peer->ip);
+        // TODO: add the peer back to their channels
     }
     peer->status = PEER_ACTIVE;
     time_t now = time(0);
