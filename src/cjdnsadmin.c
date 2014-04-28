@@ -72,6 +72,7 @@ void cjdnsadmin_start(cjdnsadmin_t *adm) {
     }
 
     printf("connected to cjdns admin at %s\n", sprint_addrport(res->ai_addr));
+    freeaddrinfo(res);
 }
 
 void cjdnsadmin_fetch_peers(cjdnsadmin_t *adm)
@@ -80,6 +81,7 @@ void cjdnsadmin_fetch_peers(cjdnsadmin_t *adm)
     size_t len;
     struct bencode *b = ben_dict();
     struct bencode *args = ben_dict();
+    // TODO: fix memory leak
     ben_dict_set(b, ben_str("q"), ben_str("NodeStore_dumpTable"));
     ben_dict_set(b, ben_str("args"), args);
     ben_dict_set(args, ben_str("page"), ben_int(adm->fetch_peers_page));
@@ -126,6 +128,7 @@ void cjdnsadmin_process_select_descriptors(cjdnsadmin_t *adm, fd_set *in_set,
 }
 
 void handle_message(cjdnsadmin_t *adm, char *buffer, ssize_t len) {
+    // TODO: fix memory leak
     struct bencode *b = ben_decode(buffer, len);
     if (!b) {
         fprintf(stderr, "bencode error:\n");
@@ -147,7 +150,8 @@ void handle_message(cjdnsadmin_t *adm, char *buffer, ssize_t len) {
     }
     // check if there is more
     struct bencode *more = ben_dict_get_by_str(b, "more");
-    if (more && ben_cmp(more, ben_int(1)) == 0) {
+    int more_int = more && ben_is_int(more) && ben_int_val(more);
+    if (more_int == 1) {
         // get the next page of the routing table
         adm->fetch_peers_page++;
         cjdnsadmin_fetch_peers(adm);
@@ -155,7 +159,7 @@ void handle_message(cjdnsadmin_t *adm, char *buffer, ssize_t len) {
         // start from the first page next time
         adm->fetch_peers_page = 0;
     }
-    free(b);
+    ben_free(b);
 }
 
 void
