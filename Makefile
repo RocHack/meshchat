@@ -4,7 +4,7 @@ SRC += $(wildcard deps/*/*.c)
 OBJ = $(SRC:.c=.o)
 CFLAGS = -Ideps -Wall -pedantic
 CFLAGS += -std=gnu99
-LDFLAGS =
+LDFLAGS = -luv
 
 all: $(BIN)
 

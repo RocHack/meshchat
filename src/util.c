@@ -6,11 +6,32 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
 #include "util.h"
+
+#include <assert.h>
+
+void current_clock(struct timespec* a) {
+#ifdef _POSIX_MONOTONIC_CLOCK
+    assert(0==clock_gettime(CLOCK_MONOTONIC,a));
+#else
+    struct timeval derp;
+    assert(0==gettimeofday(&derp,NULL));
+    a->tv_sec = derp.tv_sec;
+    a->tv_nsec = derp.tv_usec * 1000L;
+#endif
+}
+    
+double time_since(struct timespec* event) {
+    struct timespec now;
+    current_clock(&now);
+    double res = now.tv_nsec - event->tv_nsec;
+    return now.tv_sec - event->tv_sec + res / 1000000000L;
+}
 
 /* returns a pointer to a STATIC BUFFER, do not free and expect it to be overwritten on next call */
 const char *
-sprint_addrport(struct sockaddr *in)
+sprint_addrport(const struct sockaddr *in)
 {
     static char buffer[INET6_ADDRSTRLEN + 9]; // port{max 5}, :, [], \0
     char *buffer6 = buffer + 1; // start at pos 1 to put a [ before ipv6 addrs
