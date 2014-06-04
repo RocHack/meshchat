@@ -8,6 +8,14 @@ LDFLAGS = -luv
 
 all: $(BIN)
 
+uv_version_check: uv_version_check.c
+	${CC} -o $@ $<
+
+uv_version_check_thing: uv_version_check
+	@./$<
+
+$(BIN): uv_version_check_thing
+
 $(BIN): $(OBJ)
 	${CC} -o $@ ${OBJ} ${LDFLAGS}
 
@@ -23,5 +31,5 @@ uninstall:
 clean:
 	rm -f $(BIN) $(OBJ)
 
-.PHONY: all install uninstall
+.PHONY: all install uninstall uv_version_check_thing
 
