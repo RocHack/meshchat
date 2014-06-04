@@ -22,8 +22,11 @@
 
 #define noAction NULL
 
+enum irc_modes { INITIALIZING, INITIALIZED };
+
 struct irc_session {
     uv_tcp_t handle;
+    enum irc_modes mode;
     ircd_t* ircd;
     char* buffer;
     char inbuf[IRCD_BUFFER_LEN];
@@ -187,6 +190,8 @@ static void on_welcomed(uv_write_t* req, int status) {
             irc_session_names(session, &prefix, chan);
         }
     }
+
+    session->mode = INITIALIZED;
 }
 
 void
@@ -231,7 +236,8 @@ void on_closed(uv_handle_t* handle) {
 void
 ircd_handle_message(struct irc_session *session,
         char *lineptr, size_t len) {
-    ircd_t* ircd = session->ircd;
+    fprintf(stderr,"Got message %s\n",lineptr);
+    ircd_t* ircd = session->ircd;    
     struct irc_prefix prefix = {
         .nick = ircd->nick,
         //.user = ircd->username,
@@ -239,156 +245,166 @@ ircd_handle_message(struct irc_session *session,
         //.user = ircd->nick,
         .host = ircd->host
     };
-    if (strncmp(lineptr, "NICK ", 5) == 0) {
-        char oldnick[MESHCHAT_NAME_LEN];
-        prefix.nick = oldnick;
-        strncpy(oldnick, ircd->nick, MESHCHAT_NAME_LEN);
-        strwncpy(ircd->nick, lineptr + 5, MESHCHAT_NAME_LEN);
-        callback_call(ircd->callbacks.on_nick, NULL, ircd->nick);
-        if (oldnick[0]) {
+    switch(session->mode) {
+    case INITIALIZING:
+        if (strncmp(lineptr, "NICK ", 5) == 0) {
+            strwncpy(ircd->nick, lineptr + 5, MESHCHAT_NAME_LEN);
+            callback_call(ircd->callbacks.on_nick, NULL, ircd->nick);
+            if (ircd->username[0]) {
+                irc_session_welcome(ircd, session);
+            }
+
+        } else if (strncmp(lineptr, "USER ", 5) == 0) {
+            strwncpy(ircd->username, lineptr + 5, MESHCHAT_FULLNAME_LEN);
+            if (ircd->nick[0]) {
+                irc_session_welcome(ircd, session);
+            }
+        }
+        break;
+    case INITIALIZED:
+        if (strncmp(lineptr, "NICK ", 5) == 0) {
+            char oldnick[MESHCHAT_NAME_LEN];
+            prefix.nick = oldnick;
+            strncpy(oldnick, ircd->nick, MESHCHAT_NAME_LEN);
+            strwncpy(ircd->nick, lineptr + 5, MESHCHAT_NAME_LEN);
+            callback_call(ircd->callbacks.on_nick, NULL, ircd->nick);
             // acknowledge nick change
-            ircd_nick(ircd, &prefix, ircd->nick);
-        } else if (ircd->username[0]) {
-            irc_session_welcome(ircd, session);
-        }
-
-    } else if (strncmp(lineptr, "USER ", 5) == 0) {
-        strwncpy(ircd->username, lineptr + 5, MESHCHAT_FULLNAME_LEN);
-        if (ircd->username[0] && ircd->nick[0]) {
-            irc_session_welcome(ircd, session);
-        }
-
-    } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
-        char *channels = lineptr + 5, *channel;
-        // split by comma
-        for (channel = strtok(channels, ","); channel;
-                channel = strtok(NULL, ",")) {
-            callback_call(ircd->callbacks.on_join, channel, ircd->nick);
-            struct irc_channel *chan = ircd_get_channel(ircd, channel);
-            if (!chan) {
-                fprintf(stderr, "Unable to get channel\n");
-            } else {
-                chan->in = true;
+            ircd_nick(ircd, &prefix, ircd->nick);        
+        } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
+            char *channels = lineptr + 5, *channel;
+            // split by comma
+            for (channel = strtok(channels, ","); channel;
+                    channel = strtok(NULL, ",")) {
+                callback_call(ircd->callbacks.on_join, channel, ircd->nick);
+                struct irc_channel *chan = ircd_get_channel(ircd, channel);
+                if (!chan) {
+                    fprintf(stderr, "Unable to get channel\n");
+                } else {
+                    chan->in = true;
+                }
+                // tell clients to join
+                ircd_join(ircd, &prefix, channel);
+                // give clients names
+                for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+                    irc_session_names(session, &prefix, chan);
+                }
             }
-            // tell clients to join
-            ircd_join(ircd, &prefix, channel);
-            // give clients names
-            for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
-                irc_session_names(session, &prefix, chan);
+
+        } else if (strncmp(lineptr, "PART ", 5) == 0) {
+            char *channel = lineptr + 5;
+            char *message = channel + strlen(channel)+1;
+            callback_call(ircd->callbacks.on_part, channel, ircd->nick);
+            if (message - lineptr > len) {
+                message = "";
             }
-        }
+            ircd_part(ircd, &prefix, channel, message);
 
-    } else if (strncmp(lineptr, "PART ", 5) == 0) {
-        char *channel = lineptr + 5;
-        char *message = channel + strlen(channel)+1;
-        callback_call(ircd->callbacks.on_part, channel, ircd->nick);
-        if (message - lineptr > len) {
-            message = "";
-        }
-        ircd_part(ircd, &prefix, channel, message);
-
-    } else if (strncmp(lineptr, "PRIVMSG ", 8) == 0) {
-        char channel[MESHCHAT_CHANNEL_LEN];
-        char message[MESHCHAT_MESSAGE_LEN];
-        int clen = strwncpy(channel, lineptr + 8, MESHCHAT_CHANNEL_LEN);
-        if (lineptr[clen + 9] == ':') {
-            // skip colon/prefix
-            clen++;
-        }
-        strncpy(message, lineptr + 9 + clen, MESHCHAT_MESSAGE_LEN);
-        callback_call(ircd->callbacks.on_msg, channel, message);
-
-    } else if (strncmp(lineptr, "NOTICE ", 7) == 0) {
-        // check for CTCP message (surrounded with 0x01)
-        if (lineptr[7] == 0x01) {
-            //message[strlen(message)-1] = '\0';
-            printf("notice! \"%s\"\n", lineptr+8);
-        } else {
+        } else if (strncmp(lineptr, "PRIVMSG ", 8) == 0) {
             char channel[MESHCHAT_CHANNEL_LEN];
             char message[MESHCHAT_MESSAGE_LEN];
-            int clen = strwncpy(channel, lineptr + 7, MESHCHAT_CHANNEL_LEN);
-            if (lineptr[clen + 8] == ':') {
+            int clen = strwncpy(channel, lineptr + 8, MESHCHAT_CHANNEL_LEN);
+            if (lineptr[clen + 9] == ':') {
                 // skip colon/prefix
                 clen++;
             }
-            strncpy(message, lineptr + 8 + clen, MESHCHAT_MESSAGE_LEN);
-            printf("notice in %s: \"%s\"\n", channel, message);
-            callback_call(ircd->callbacks.on_notice, channel, message);
-        }
+            strncpy(message, lineptr + 9 + clen, MESHCHAT_MESSAGE_LEN);
+            callback_call(ircd->callbacks.on_msg, channel, message);
 
-    } else if (strncmp(lineptr, "PING ", 5) == 0) {
-        ircd_send(session, NULL, noAction, "PONG %s", lineptr + 5);
+        } else if (strncmp(lineptr, "NOTICE ", 7) == 0) {
+            // check for CTCP message (surrounded with 0x01)
+            if (lineptr[7] == 0x01) {
+                //message[strlen(message)-1] = '\0';
+                printf("notice! \"%s\"\n", lineptr+8);
+            } else {
+                char channel[MESHCHAT_CHANNEL_LEN];
+                char message[MESHCHAT_MESSAGE_LEN];
+                int clen = strwncpy(channel, lineptr + 7, MESHCHAT_CHANNEL_LEN);
+                if (lineptr[clen + 8] == ':') {
+                    // skip colon/prefix
+                    clen++;
+                }
+                strncpy(message, lineptr + 8 + clen, MESHCHAT_MESSAGE_LEN);
+                printf("notice in %s: \"%s\"\n", channel, message);
+                callback_call(ircd->callbacks.on_notice, channel, message);
+            }
 
-    } else if (strncmp(lineptr, "MODE ", 5) == 0) {
-        return;
+        } else if (strncmp(lineptr, "PING ", 5) == 0) {
+            ircd_send(session, NULL, noAction, "PONG %s", lineptr + 5);
 
-    } else if (strncmp(lineptr, "WHO ", 4) == 0) {
-        const char *channel_name = lineptr + 4;
-        if (len < 6) {
-            irc_session_not_enough_args(ircd, session, "WHO");
+        } else if (strncmp(lineptr, "MODE ", 5) == 0) {
             return;
-        }
-        // :host 352 mynick #chan ~usern remotehost ircserver nick H :0 fullname
-        struct irc_channel *chan = ircd_get_channel(ircd, channel_name);
-        struct irc_user *user;
-        for (user = chan->user_list; user; user = user->next) {
-            ircd_send(session, &ircd->prefix, noAction, "352 %s %s ~%s %s %s %s %c :%u %s",
-                    //ircd->nick, channel_name, user->username, user->host,
-                    ircd->nick, channel_name, user->nick, user->host,
-                    user->host, user->nick, 'H', user->is_me ? 0 : 1, user->nick);
-        }
-        ircd_send(session, &ircd->prefix, noAction, "315 %s %s :End of /WHO list.", ircd->nick, channel_name);
 
-    } else if (strncmp(lineptr, "WHOIS ", 6) == 0) {
-        const char *target = lineptr + 6;
-        if (len < 8) {
-            irc_session_not_enough_args(ircd, session, "WHOIS");
-            return;
-        }
-        if (!target) {
-            ircd_send(session, &ircd->prefix, noAction,
-                    "401 %s %s :No such nick/channel", ircd->nick, target);
-        } else {
-            // 311 nick target ~username host * :Real Name
-            // 319 nick target :#chan1 #chan2 #chan3
-            // 312 nick target server :MeshChat
-            // 338 nick target host :actually using host
-            // 317 nick target 78744 1397743067 :seconds idle, signon time
-
-        }
-        ircd_send(session, &ircd->prefix, noAction, "318 %s %s :End of /WHOIS list.",
-                ircd->nick, target);
-
-    } else if (strncmp(lineptr, "QUIT ", 5) == 0) {
-        char *message = lineptr + 5;
-        if (message[0] == ':') message++;
-        ircd_quit(ircd, &prefix, message);
-        uv_close((uv_handle_t*)&session->handle,on_closed);
-
-    } else if (strncmp(lineptr, "PASS ", 5) == 0) {
-        // TODO
-        return;
-
-    } else if (strncmp(lineptr, "LIST ", 5) == 0) {
-        ircd_send(session, &ircd->prefix, noAction, "321 %s Channel :Users  Name",
-                ircd->nick);
-        struct irc_channel *chan;
-        for (chan = ircd->channel_list; chan; chan = chan->next) {
-            const char *topic = ""; // TODO
-            unsigned int users = 0;
+        } else if (strncmp(lineptr, "WHO ", 4) == 0) {
+            const char *channel_name = lineptr + 4;
+            if (len < 6) {
+                irc_session_not_enough_args(ircd, session, "WHO");
+                return;
+            }
+            // :host 352 mynick #chan ~usern remotehost ircserver nick H :0 fullname
+            struct irc_channel *chan = ircd_get_channel(ircd, channel_name);
             struct irc_user *user;
             for (user = chan->user_list; user; user = user->next) {
-                users++;
+                ircd_send(session, &ircd->prefix, noAction, "352 %s %s ~%s %s %s %s %c :%u %s",
+                        //ircd->nick, channel_name, user->username, user->host,
+                        ircd->nick, channel_name, user->nick, user->host,
+                        user->host, user->nick, 'H', user->is_me ? 0 : 1, user->nick);
             }
-            ircd_send(session, &ircd->prefix, noAction, "322 %s %s %u :%s",
-                    ircd->nick, chan->name, users, topic);
-        }
-        ircd_send(session, &ircd->prefix, noAction, "323 %s :End of /LIST",
-                ircd->nick);
+            ircd_send(session, &ircd->prefix, noAction, "315 %s %s :End of /WHO list.", ircd->nick, channel_name);
 
-    } else {
-        printf("Unhandled message: %s\n", lineptr);
-    }
+        } else if (strncmp(lineptr, "WHOIS ", 6) == 0) {
+            const char *target = lineptr + 6;
+            if (len < 8) {
+                irc_session_not_enough_args(ircd, session, "WHOIS");
+                return;
+            }
+            if (!target) {
+                ircd_send(session, &ircd->prefix, noAction,
+                        "401 %s %s :No such nick/channel", ircd->nick, target);
+            } else {
+                // 311 nick target ~username host * :Real Name
+                // 319 nick target :#chan1 #chan2 #chan3
+                // 312 nick target server :MeshChat
+                // 338 nick target host :actually using host
+                // 317 nick target 78744 1397743067 :seconds idle, signon time
+
+            }
+            ircd_send(session, &ircd->prefix, noAction, "318 %s %s :End of /WHOIS list.",
+                    ircd->nick, target);
+
+        } else if (strncmp(lineptr, "QUIT", 4) == 0) {
+            const char *message = "Quit";
+            if(lineptr[4] == ' ') {
+                message = lineptr + 5;
+                if (message[0] == ':') message++;
+            }
+            ircd_quit(ircd, &prefix, message);
+            uv_close((uv_handle_t*)&session->handle,on_closed);
+
+        } else if (strncmp(lineptr, "PASS ", 5) == 0) {
+            // TODO
+            return;
+
+        } else if (strncmp(lineptr, "LIST", 4) == 0) {
+            ircd_send(session, &ircd->prefix, noAction, "321 %s Channel :Users  Name",
+                    ircd->nick);
+            struct irc_channel *chan;
+            for (chan = ircd->channel_list; chan; chan = chan->next) {
+                const char *topic = ""; // TODO
+                unsigned int users = 0;
+                struct irc_user *user;
+                for (user = chan->user_list; user; user = user->next) {
+                    users++;
+                }
+                ircd_send(session, &ircd->prefix, noAction, "322 %s %s %u :%s",
+                        ircd->nick, chan->name, users, topic);
+            }
+            ircd_send(session, &ircd->prefix, noAction, "323 %s :End of /LIST",
+                    ircd->nick);
+    
+        } else {
+            printf("Unhandled message: %s\n", lineptr);
+        }
+    };
 }
 int
 ircd_handle_buffer(struct irc_session *session, ssize_t nread) {
@@ -466,6 +482,7 @@ do_accept(uv_stream_t* server, int status) {
 
     new_session->buffer = NULL;
     new_session->ircd = ircd;
+    new_session->mode = INITIALIZING;
 
     if (uv_accept((uv_stream_t*)&ircd->handle, (uv_stream_t*)&new_session->handle) < 0) {
         free(new_session);
