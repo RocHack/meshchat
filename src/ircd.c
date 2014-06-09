@@ -69,6 +69,8 @@ void irc_session_join(ircd_t *ircd, struct irc_session *session,
         struct irc_prefix *prefix, struct irc_channel *channel);
 void irc_session_names(ircd_t *ircd, struct irc_session *session,
         struct irc_prefix *prefix, struct irc_channel *channel);
+void irc_session_list_channels(ircd_t *ircd, struct irc_session *session,
+    struct irc_prefix *prefix, const char *channels);
 
 inline void
 callback_call(callback_t cb, char *channel, char *data) {
@@ -400,22 +402,14 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         // TODO
         return;
 
+    // List all channels
+    } else if (strncmp(lineptr, "LIST", 5) == 0 ||
+            strncmp(lineptr, "LIST ", 6) == 0) {
+        irc_session_list_channels(ircd, session, &prefix, NULL);
+
+    // List some channels
     } else if (strncmp(lineptr, "LIST ", 5) == 0) {
-        ircd_send(ircd, session, &ircd->prefix, "321 %s Channel :Users  Name",
-                ircd->nick);
-        struct irc_channel *chan;
-        for (chan = ircd->channel_list; chan; chan = chan->next) {
-            const char *topic = ""; // TODO
-            unsigned int users = 0;
-            struct irc_user *user;
-            for (user = chan->user_list; user; user = user->next) {
-                users++;
-            }
-            ircd_send(ircd, session, &ircd->prefix, "322 %s %s %u :%s",
-                    ircd->nick, chan->name, users, topic);
-        }
-        ircd_send(ircd, session, &ircd->prefix, "323 %s :End of /LIST",
-                ircd->nick);
+        irc_session_list_channels(ircd, session, &prefix, &lineptr[5]);
 
     } else {
         printf("Unhandled message: %s\n", lineptr);
@@ -743,4 +737,26 @@ void
 irc_session_join(ircd_t *ircd, struct irc_session *session, struct irc_prefix
         *prefix, struct irc_channel *channel) {
     ircd_send(ircd, session, prefix, "JOIN :%s", channel->name);
+}
+
+void
+irc_session_list_channels(ircd_t *ircd, struct irc_session *session,
+    struct irc_prefix *prefix, const char *channels) {
+    ircd_send(ircd, session, &ircd->prefix, "321 %s Channel :Users  Name",
+            ircd->nick);
+    struct irc_channel *chan;
+    for (chan = ircd->channel_list; chan; chan = chan->next) {
+        // TODO: find exact matches
+        if (channels && !strstr(channels, chan->name)) return;
+        const char *topic = ""; // TODO
+        unsigned int users = 0;
+        struct irc_user *user;
+        for (user = chan->user_list; user; user = user->next) {
+            users++;
+        }
+        ircd_send(ircd, session, &ircd->prefix, "322 %s %s %u :%s",
+                ircd->nick, chan->name, users, topic);
+    }
+    ircd_send(ircd, session, &ircd->prefix, "323 %s :End of /LIST",
+            ircd->nick);
 }
