@@ -70,7 +70,9 @@ void irc_session_join(ircd_t *ircd, struct irc_session *session,
 void irc_session_names(ircd_t *ircd, struct irc_session *session,
         struct irc_prefix *prefix, struct irc_channel *channel);
 void irc_session_list_channels(ircd_t *ircd, struct irc_session *session,
-    struct irc_prefix *prefix, const char *channels);
+        struct irc_prefix *prefix, const char *channels);
+void irc_session_motd(ircd_t *ircd, struct irc_session *session,
+        struct irc_prefix *prefix);
 
 inline void
 callback_call(callback_t cb, char *channel, char *data) {
@@ -242,6 +244,8 @@ irc_session_welcome(ircd_t *ircd, struct irc_session *session) {
         .nick = ircd->nick,
         .host = ircd->host
     };
+
+    irc_session_motd(ircd, session, &prefix);
 
     // send joins for the rooms we are in
     struct irc_channel *chan;
@@ -417,6 +421,9 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
     // List some channels
     } else if (strncmp(lineptr, "LIST ", 5) == 0) {
         irc_session_list_channels(ircd, session, &prefix, &lineptr[5]);
+
+    } else if (strncasecmp(lineptr, "MOTD", 5) == 0) {
+        irc_session_motd(ircd, session, &prefix);
 
     } else {
         printf("Unhandled message: %s\n", lineptr);
@@ -766,4 +773,14 @@ irc_session_list_channels(ircd_t *ircd, struct irc_session *session,
     }
     ircd_send(ircd, session, &ircd->prefix, "323 %s :End of /LIST",
             ircd->nick);
+}
+
+void
+irc_session_motd(ircd_t *ircd, struct irc_session *session,
+        struct irc_prefix *prefix) {
+    static const char *motd = "Welcome to meshchat.";
+
+    ircd_send(ircd, session, &ircd->prefix, "375 %s :- %s Message of the day - ", ircd->nick, ircd->host);
+    ircd_send(ircd, session, &ircd->prefix, "372 %s :- %s", ircd->nick, motd);
+    ircd_send(ircd, session, &ircd->prefix, "376 %s :End of /MOTD command.", ircd->nick);
 }
