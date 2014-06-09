@@ -213,6 +213,7 @@ ircd_send(ircd_t *ircd, struct irc_session *session, struct irc_prefix *prefix,
     size_t suffixlen = 2;
     int len = 0;
     int sv = 0;
+    ssize_t bytes;
 
     prefixlen = prefix ? sprint_prefix(buffer, prefix) : 0;
 
@@ -229,7 +230,12 @@ ircd_send(ircd_t *ircd, struct irc_session *session, struct irc_prefix *prefix,
 
     len += suffixlen;
     while (sv < len) {
-        sv += send(session->fd, buffer + sv, len - sv, 0);
+        bytes = send(session->fd, buffer + sv, len - sv, 0);
+        if (bytes < 0) {
+            perror("send");
+            return;
+        }
+        sv += bytes;
     }
 }
 
@@ -407,7 +413,7 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
         ircd_quit(ircd, &prefix, message);
         close(session->fd);
         session->fd = -1;
-        //ircd_free_session(ircd, session);
+        ircd_free_session(ircd, session);
 
     } else if (strncmp(lineptr, "PASS ", 5) == 0) {
         // TODO
