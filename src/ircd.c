@@ -289,6 +289,13 @@ ircd_handle_message(ircd_t *ircd, struct irc_session *session,
             irc_session_welcome(ircd, session);
         }
 
+    } else if (strncmp(lineptr, "CAP LS", 6) == 0) {
+        // capabilities? what capabilities?
+        ircd_send(ircd, session, &ircd->prefix, "CAP * LS :");
+
+    } else if (strncmp(lineptr, "CAP END", 7) == 0) {
+        return;
+
     } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
         char *channels = lineptr + 5, *channel;
         // split by comma
