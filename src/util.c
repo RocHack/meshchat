@@ -1,5 +1,7 @@
 /* vim: set expandtab ts=4 sw=4: */
 
+#include "util.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,7 +9,6 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
-#include "util.h"
 
 #include <assert.h>
 

@@ -6,6 +6,8 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <arpa/inet.h>
+
 const char *sprint_addrport(const struct sockaddr *addr);
 int strwncpy(char *dst, const char *src, size_t max);
 

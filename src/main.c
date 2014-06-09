@@ -3,14 +3,15 @@
  * main.c
  */
 
+#include "meshchat.h"
+#include "ircd.h"
+
 #include <uv.h>
 
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#include "meshchat.h"
-#include "ircd.h"
 
 int main()
 //int main(int argc, char *argv[])

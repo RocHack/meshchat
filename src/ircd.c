@@ -3,9 +3,12 @@
  * ircd.c
  */
 
+#include "ircd.h"
+#include "meshchat.h"
+#include "util.h"
+
 #include <uv.h>
 
-#include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -16,9 +19,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include "ircd.h"
-#include "meshchat.h"
-#include "util.h"
 
 #define noAction NULL
 
