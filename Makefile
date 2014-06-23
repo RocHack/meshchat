@@ -1,10 +1,10 @@
 MAKEFLAGS += --no-print-directory
 
 all: 
-	cd getuv && . ./make.sh
+	@cd getuv && $(MAKE)
 
 clean: 
-	@$(MAKE) --no-print-directory -f main.mk clean
-	cd getuv && make clean
+	@$(MAKE) -f main.mk clean
+	@cd getuv && $(MAKE) clean
 
 .PHONY: all clean

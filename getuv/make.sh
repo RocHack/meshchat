@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
-if make check_version ; then
+if make check_version; then
     ./check_version
 else
     make just_internal

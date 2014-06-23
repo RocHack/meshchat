@@ -1,7 +1,14 @@
-MAKEFLAGS += --no-print-directory
+ifndef DEBUGGING_CHECK_VERSION 
+MAKEFLAGS += -s
+endif
 
 all:
-	@echo either check_version or check_exists
+	@if $(MAKE) check_version $(if $(DEBUGGING_CHECK_VERSION), ,2>/dev/null) ; then \
+		./check_version ; \
+	else \
+		$(MAKE) just_internal ; \
+		./just_internal ; \
+	fi
 
 check_version: check_version.o sync.o
 	gcc -o $@ $^ -luv

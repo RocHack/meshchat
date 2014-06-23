@@ -71,6 +71,7 @@ void syncIntervalUV(void) {
     }
 
     puts("Making libuv...");
+    setenv("MAKEFLAGS","",1);
     assert(0==run(1,"make"));
 
     chdir("../../getuv/");
