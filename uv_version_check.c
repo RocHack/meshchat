@@ -1,4 +1,4 @@
-#include <uv-version.h>
+#include <uv.h> // uv-version.h does not exist for older libuv versions
 
 #include <stdio.h>
 #include <stdlib.h> // exit
