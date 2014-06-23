@@ -1,12 +1,10 @@
-all: uv_version_check
-	@./$<
+MAKEFLAGS += --no-print-directory
+
+all: 
+	cd getuv && . ./make.sh
 
 clean: 
-	@make --no-print-directory -f main.mk clean
-	rm -f uv_version_check
+	@$(MAKE) --no-print-directory -f main.mk clean
+	cd getuv && make clean
 
-uv_version_check: uv_version_check.c
-	${CC} -o $@ $<
-
-.PHONY: all
-
+.PHONY: all clean
