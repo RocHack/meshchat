@@ -1,9 +1,9 @@
 MAKEFLAGS += --no-print-directory
 
-all: 
+all:
 	cd getuv && . ./make.sh
 
-clean: 
+clean:
 	@$(MAKE) --no-print-directory -f main.mk clean
 	cd getuv && make clean
 

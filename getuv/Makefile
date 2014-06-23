@@ -11,7 +11,7 @@ just_internal: just_internal.o sync.o
 
 clean:
 	rm -f check_version just_internal *.o
-	cd ../deps/libuv && make clean
+	if [ -d ../deps/libuv ]; then cd ../deps/libuv && make clean; fi
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $^
