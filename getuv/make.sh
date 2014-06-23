@@ -1,6 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
+
 set -e
-if make check_version ; then
+if make check_version >/dev/null 2>&1; then
     ./check_version
 else
     make just_internal
