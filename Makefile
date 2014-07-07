@@ -1,27 +1,10 @@
-BIN = meshchat
-SRC = $(wildcard src/*.c)
-SRC += $(wildcard deps/*/*.c)
-OBJ = $(SRC:.c=.o)
-CFLAGS = -Ideps -Wall -pedantic
-CFLAGS += -std=gnu99
-LDFLAGS =
+MAKEFLAGS += --no-print-directory
 
-all: $(BIN)
+all: 
+	@cd getuv && $(MAKE)
 
-$(BIN): $(OBJ)
-	${CC} -o $@ ${OBJ} ${LDFLAGS}
+clean: 
+	@$(MAKE) -f main.mk clean
+	@cd getuv && $(MAKE) clean
 
-.c.o:
-	${CC} -c ${CFLAGS} $< -o $@
-
-install: all
-	install -m 0755 ${BIN} ${DESTDIR}${BINDIR}
-
-uninstall:
-	rm -f ${DESTDIR}${BINDIR}/${BIN}
-
-clean:
-	rm -f $(BIN) $(OBJ)
-
-.PHONY: all install uninstall
-
+.PHONY: all clean

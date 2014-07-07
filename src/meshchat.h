@@ -6,6 +6,8 @@
 #ifndef MESHCHAT_H
 #define MESHCHAT_H
 
+#include <sys/select.h> // fd_set
+
 #define MESHCHAT_MESSAGE_LEN 512
 #define MESHCHAT_CHANNEL_LEN 50
 #define MESHCHAT_NAME_LEN 9

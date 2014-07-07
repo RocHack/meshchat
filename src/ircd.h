@@ -7,6 +7,7 @@
 #define IRCD_H
 
 #include <sys/select.h>
+#include <stdlib.h>
 
 #define IRCD_BACKLOG 10
 #define IRCD_BUFFER_LEN 1024
