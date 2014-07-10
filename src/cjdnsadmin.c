@@ -63,7 +63,6 @@ void on_read(uv_udp_t* stream, ssize_t nread, const uv_buf_t* buf,
         exit(99);
     }
     if(nread == 0) return;
-    fprintf(stderr,"read %lu\n",nread);
     handle_message(stream->data,buf->base,nread);
 }
 
