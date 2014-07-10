@@ -72,6 +72,8 @@ bool irc_channel_add_nick(struct irc_channel *channel, const char *nick,
         const char *ip, bool is_me);
 bool irc_channel_remove_nick(struct irc_channel *channel, const char *nick);
 void irc_session_welcome(ircd_t *ircd, struct irc_session *session);
+static void irc_session_topic(struct irc_session *session, struct irc_prefix 
+        *prefix, struct irc_channel *channel);
 void irc_session_join(struct irc_session *session,
         struct irc_prefix *prefix, struct irc_channel *channel);
 void irc_session_names(struct irc_session *session,
@@ -122,6 +124,13 @@ ircd_free(ircd_t *ircd) {
     }
     free(ircd);
 }
+
+static void free_session(uv_handle_t* handle) {
+    GETDATA(struct irc_session, session, handle);
+    free(session->buffer);
+    ircd_free_session(session);
+}
+
 
 int sprint_prefix(char *buffer, struct irc_prefix *prefix) {
     if (prefix->nick) {
@@ -234,19 +243,13 @@ ircd_free_session(struct irc_session *session) {
     }
 }
 
-void on_closed(uv_handle_t* handle) {
-//    GETDATA(struct irc_session,session,handle);
-
-    //ircd_free_session(ircd, session);
-}
 void
 ircd_handle_message(struct irc_session *session,
         char *lineptr, size_t len) {
-    fprintf(stderr,"Got message %s\n",lineptr);
     ircd_t* ircd = session->ircd;    
     struct irc_prefix prefix = {
         .nick = ircd->nick,
-        //.user = ircd->username,
+        .user = ircd->username,
         //.user = NULL,
         //.user = ircd->nick,
         .host = ircd->host
@@ -280,11 +283,23 @@ ircd_handle_message(struct irc_session *session,
 
         } else if (strncmp(lineptr, "CAP LS", 6) == 0) {
             // capabilities? what capabilities?
-            ircd_send(session, &ircd->prefix, noAction, "CAP * LS :");
+            ircd_send(session, &prefix, noAction, "CAP * LS :");
 
         } else if (strncmp(lineptr, "CAP END", 7) == 0) {
             return;
 
+        } else if (strncmp(lineptr, "TOPIC ", 6) == 0) {
+            char* channel = lineptr + 6;
+            char* space = strchr(channel, ' ');
+            if(space) {
+                *space = '\0';
+                char* topic = space+1;
+                struct irc_channel* chan = ircd_get_channel(ircd, channel);
+                strwncpy(chan->topic, topic, MESHCHAT_MESSAGE_LEN);                
+                for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
+                    irc_session_topic(session, &prefix, chan);
+                }
+            }
         } else if (strncmp(lineptr, "JOIN ", 5) == 0) {
             char *channels = lineptr + 5, *channel;
             // split by comma
@@ -294,14 +309,16 @@ ircd_handle_message(struct irc_session *session,
                 struct irc_channel *chan = ircd_get_channel(ircd, channel);
                 if (!chan) {
                     fprintf(stderr, "Unable to get channel\n");
-                } else {
+                } else if (!chan->in) {
                     chan->in = true;
+                } else {
+                    //continue;
                 }
                 // tell clients to join
                 ircd_join(ircd, &prefix, channel);
                 // give clients names
                 for (struct irc_session *sess = ircd->session_list; sess; sess = sess->next) {
-                    irc_session_names(session, &prefix, chan);
+                    irc_session_names(sess, &prefix, chan);
                 }
             }
 
@@ -393,7 +410,8 @@ ircd_handle_message(struct irc_session *session,
                 if (message[0] == ':') message++;
             }
             ircd_quit(ircd, &prefix, message);
-            uv_close((uv_handle_t*)&session->handle,on_closed);
+            uv_read_stop((uv_stream_t*)&session->handle);
+            uv_close((uv_handle_t*)&session->handle,free_session);
 
         } else if (strncmp(lineptr, "PASS ", 5) == 0) {
             // TODO
@@ -458,12 +476,6 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggestion, uv_buf_t* buf) 
     session->buffer = realloc(session->buffer,suggestion);
     buf->base = session->buffer;
     buf->len = suggestion;
-}
-
-static void free_session(uv_handle_t* handle) {
-    GETDATA(struct irc_session, session, handle);
-    free(session->buffer);
-    ircd_free_session(session);
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
@@ -751,6 +763,12 @@ irc_session_names(struct irc_session *session, struct irc_prefix
     ircd_send(session, prefix, noAction, "366 %s %s :End of /NAMES list.", session->ircd->nick, channel->name);
 }
 
+static void irc_session_topic(struct irc_session *session, struct irc_prefix 
+        *prefix, struct irc_channel *channel) {
+    bool hasTopic = *channel->topic != 0;
+    ircd_send(session, prefix, noAction, "%d %s %s %s", hasTopic ? 332 : 331, session->ircd->nick, channel->name, hasTopic ? channel->topic : ":");
+}
+
 void
 irc_session_join(struct irc_session *session, struct irc_prefix
         *prefix, struct irc_channel *channel) {
@@ -766,14 +784,13 @@ irc_session_list_channels(ircd_t *ircd, struct irc_session *session,
     for (chan = ircd->channel_list; chan; chan = chan->next) {
         // TODO: find exact matches
         if (channels && !strstr(channels, chan->name)) return;
-        const char *topic = ""; // TODO
         unsigned int users = 0;
         struct irc_user *user;
         for (user = chan->user_list; user; user = user->next) {
             users++;
         }
         ircd_send(session, &ircd->prefix, noAction, "322 %s %s %u :%s",
-                ircd->nick, chan->name, users, topic);
+                ircd->nick, chan->name, users, chan->topic);
     }
     ircd_send(session, &ircd->prefix, noAction, "323 %s :End of /LIST",
             ircd->nick);
