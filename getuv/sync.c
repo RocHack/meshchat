@@ -47,7 +47,8 @@ void syncIntervalUV(void) {
         chdir("libuv");
 #ifdef NETSPAMMY
         puts("Found a local libuv. Updating...");
-        run(3, "git","pull","--ff-only");
+        run(3, "git","fetch","--all");
+        run(3, "git","checkout","v0.10.27")
 #else
         puts("Found a local libuv");
 #endif
@@ -60,19 +61,13 @@ void syncIntervalUV(void) {
         puts("Trying to compile local libuv");
         chdir("libuv");
     }
-    int autogend = (stat("configure",&buf) == 0);
-    if(!autogend) {
-        puts("Autogen...");
-        assert(0==run(2, "sh","./autogen.sh"));
-    }
-    if(!autogend || (stat("Makefile",&buf) != 0)) {
-        puts("Configure...");
-        assert(0==run(3, "./configure","--disable-shared"));
-    }
+
+    puts("Configuring libuv...");
+    assert(0==run(2, "python", "./gyp_uv.py"));
 
     puts("Making libuv...");
     setenv("MAKEFLAGS","",1);
-    assert(0==run(1,"make"));
+    assert(0==run(3,"make", "-C", "out"));
 
     chdir("../../getuv/");
 }

@@ -9,7 +9,7 @@ all: $(BIN)
 
 ifdef INTERNAL_LIBUV
 CFLAGS += -Ideps/libuv/include
-LDFLAGS += deps/libuv/.libs/libuv.a -lc -lpthread
+LDFLAGS += deps/libuv/out/Debug/libuv.a -lc -lpthread
 else
 LDFLAGS += -luv
 endif
