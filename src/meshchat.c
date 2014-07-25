@@ -245,6 +245,11 @@ handle_datagram(uv_udp_t* handle,
     meshchat_t *mc = handle->data;
     peer_t *peer;
 
+    if (!in) {
+        // no sender address -> nothing to read
+        return;
+    }
+
     if (!hash_size(mc->peers)) {
         // got a message without peers. :(
         return;
