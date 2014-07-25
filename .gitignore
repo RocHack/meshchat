@@ -1,2 +1,6 @@
 meshchat
 *.o
+
+# Deps
+deps/libuv/
+getuv/just_internal
