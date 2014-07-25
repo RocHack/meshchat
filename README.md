@@ -6,8 +6,8 @@ A decentralized chat network for cjdns, with an IRC front-end.
 
 ## Usage
 
-- Build and run: `make && ./meshchat`
-- Connect to `localhost:6667` in your IRC client.
+- Build and run: `make all && ./meshchat`
+- Connect to `localhost:6999` in your IRC client.
 - Join some channels.
 - Wait for peers to be found.
 
