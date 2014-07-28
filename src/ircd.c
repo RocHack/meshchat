@@ -211,10 +211,10 @@ static void on_welcomed(uv_write_t* req, int status) {
 
 void
 irc_session_welcome(ircd_t *ircd, struct irc_session *session) {
-    ircd_send(session, NULL, noAction, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->nick);
-    ircd_send(session, NULL, noAction, "002 %s :IRC MeshChat v1", ircd->nick);
-    ircd_send(session, NULL, noAction, "003 %s :Created 0", ircd->nick);
-    ircd_send(session, NULL, on_welcomed, "004 %s %s ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->nick, ircd->host);
+    ircd_send(session, &ircd->prefix, noAction, "001 %s :Welcome to this MeshChat Relay (I'm not really an IRC server!)", ircd->nick);
+    ircd_send(session, &ircd->prefix, noAction, "002 %s :IRC MeshChat v1", ircd->nick);
+    ircd_send(session, &ircd->prefix, noAction, "003 %s :Created 0", ircd->nick);
+    ircd_send(session, &ircd->prefix, on_welcomed, "004 %s %s ircd-meshchat-0.0.1 DOQRSZaghilopswz CFILMPQSbcefgijklmnopqrstvz bkloveqjfI", ircd->nick, ircd->host);
 }
 
 void
